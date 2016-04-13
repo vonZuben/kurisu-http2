@@ -2,23 +2,42 @@ use std::net::{TcpStream, TcpListener};
 use std::thread;
 use std::io::{Read, Write};
 use std::fs::File;
+use std::str;
+use std::slice;
 
 use std::mem;
 
-fn handle_client(mut stream: TcpStream) {
-    let mut buf: Vec<u8> = Vec::with_capacity(512);
+//unsafe fn str_from_slice(buf: &[u8], size: usize) -> &str{
+//    str::from_utf8_unchecked(slice::from_raw_parts(buf.as_ptr(), size))
+//}
 
-    let mut buf2: [u8; 512] = unsafe { mem::uninitialized() };
+fn handle_client(mut stream: TcpStream) {
+    //let mut buf: Vec<u8> = Vec::with_capacity(512);
+    //let mut buf = vec![0;512];
+    //let mut buf: Vec<u8> = Vec::with_capacity(512);
+
+    let mut buf: Vec<u8> = Vec::with_capacity(512);
+    unsafe { buf.set_len(512); }
+
+    //let mut buf2 = [0u8; 512];
+    //let mut buf2: [u8; 512] = unsafe { mem::uninitialized() };
+
+    //println!("{:?}", buf.as_mut_slice());
 
     //let err = stream.read(buf.as_mut_slice());
-    let err = stream.read(&mut buf2);
+    let err = stream.read(&mut buf);
 
-    println!("client handle");
+    println!("{:?}", stream);
 
     match err {
         Ok(n) => {
             println!("ok: {}", n);
-            let req: &str = unsafe { mem::transmute((&buf2, n)) };
+            let req: &str = str::from_utf8(&buf[..n]).unwrap();
+
+            println!("{:?}", buf); // this is so hacky i live it
+            //let req: &str = unsafe { mem::transmute((&buf2, n)) };
+            //let req: &str = str::from_utf8(&buf2).unwrap();
+            //let req: &str = unsafe { str::from_utf8_unchecked(&buf2) };
             println!("{}", req);
         },
         Err(e) => println!("err: {}", e),
@@ -34,7 +53,8 @@ fn handle_client(mut stream: TcpStream) {
         stream.write(b"HTTP/1.1 200 OK\nServer: whiteToken TESTING\nContent-Type: text/html\nConnection: Closed\n\n");
         for b in f.bytes() {
             //println!("{}", b.unwrap());
-            stream.write(unsafe { mem::transmute((&b.unwrap(), 1u64)) } );
+            //stream.write(unsafe { mem::transmute((&b.unwrap(), 1u64)) } );
+            stream.write( unsafe { slice::from_raw_parts(&b.unwrap(), 1) } );
         }
     }
     else {
@@ -46,7 +66,7 @@ fn handle_client(mut stream: TcpStream) {
 
     //stream.write(b"HTTP/1.1 200 OK\nServer: Apache/2.2.14 (Win32)\nContent-Type: text/html\nConnection: Closed\n\n<html><body>TEST</body></html>\n\n");
 
-    //println!("done");
+    println!("done");
     //stream.shutdown(std::net::Shutdown::Both);
 }
 
