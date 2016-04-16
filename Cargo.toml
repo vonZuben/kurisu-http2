@@ -4,3 +4,8 @@ version = "0.1.0"
 authors = ["Chris von Zuben <chris.vonzuben@gmail.com>"]
 
 [dependencies]
+libc = "*"
+
+[dependencies.openssl]
+version = "*"
+features = ["ecdh_auto", "tlsv1_2", "alpn"]
