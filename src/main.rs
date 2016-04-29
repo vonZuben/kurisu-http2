@@ -146,10 +146,14 @@ fn handle_client<T: Read + Write + Debug>(mut stream: T) {
                 let f = Frame::new(&buf[..n]);
                 println!("{:?}", f);
 
-                if f.length > 200 {
+                if f.f_type == 1 {
                     let b = [0u8, 0, 0, 4, 1, 0, 0, 0, 0];
                     stream.write(&b).unwrap();
-                    println!("{}", unsafe { str::from_utf8_unchecked(f.payload) } );
+
+                    let huffman = Huffman::new();
+                    let decoded = huffman.decode(&f.payload[6..]);
+
+                    println!("{}", str::from_utf8(&decoded).unwrap() );
                 }
             },
             Err(e) => {println!("err: {}", e); break;},
@@ -193,7 +197,7 @@ fn main() {
 
     // temp huffman usage just cause
     let mut huf = Huffman::new();
-    let dec = huf.decode(b"123123");
+    let _ = huf.decode(b"123123");
     huf.size();
     //let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
     //println!("listening started, ready to accept");
