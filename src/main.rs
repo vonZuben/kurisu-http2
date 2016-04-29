@@ -7,12 +7,22 @@ use std::thread;
 use std::io::{Read, Write};
 //use std::fs::File;
 use std::str;
-use std::slice;
+//use std::slice;
 //use std::sync::{Once, ONCE_INIT};
 //use std::cell::Cell;
 use std::fmt::Debug;
 
-use std::mem;
+//use std::mem;
+
+mod huffman;
+
+use huffman::Huffman;
+
+mod frame;
+
+use frame::Frame;
+
+mod bititor;
 
 //#[path = "ssl.rs"]
 //mod ssl;
@@ -78,40 +88,16 @@ use std::mem;
 //    }
 //}
 
-#[derive(Debug)]
-struct Frame<'a> {
-    length: u32,
-    f_type: u8,
-    f_flags: u8,
-    s_identifier: u32,
-    payload: &'a[u8],
-}
-
-impl<'a> Frame<'a> {
-    fn new(buf: &'a[u8]) -> Self {
-        Frame {
-            length: u32::from_le( unsafe { mem::transmute([ buf[2], buf[1], buf[0], 0u8 ]) } ),
-            f_type: buf[3],
-            f_flags: buf[4],
-            s_identifier: u32::from_le( unsafe { mem::transmute([ buf[8], buf[7], buf[6], buf[5] & 0x7F ]) } ),
-            payload: &buf[9..],
-        }
-    }
-}
-
 // bad function that is not acctualy safe to call
-fn print_hex(buf: &Vec<u8>, n: usize) {
-    let b: &[u8] = unsafe { slice::from_raw_parts(buf.as_ptr(), n) };
-    for i in 0..n {
-        print!("{:02X}:", b[i])
+fn print_hex(buf: &[u8]) {
+    //let b: &[u8] = unsafe { slice::from_raw_parts(buf.as_ptr(), n) };
+    for i in &buf[..] {
+        print!("{:02X}:", i)
     }
     println!("\n");
 }
 
 fn handle_client<T: Read + Write + Debug>(mut stream: T) {
-    //let mut buf: Vec<u8> = Vec::with_capacity(512);
-    //let mut buf = vec![0;512];
-    //let mut buf: Vec<u8> = Vec::with_capacity(512);
 
     let mut buf: Vec<u8> = Vec::with_capacity(512);
     unsafe { buf.set_len(512); }
@@ -124,14 +110,12 @@ fn handle_client<T: Read + Write + Debug>(mut stream: T) {
     //let err = stream.read(buf.as_mut_slice());
     let err = stream.read(&mut buf);
 
-    println!("{:?}", stream);
-
     match err {
         Ok(n) => {
             println!("ok: {}", n);
             let req: &str = unsafe { str::from_utf8_unchecked(&buf[..n]) };
 
-            print_hex(&buf, n);
+            print_hex(&buf[..n]);
 
             //println!("{:?}", buf); // this is so hacky i live it
             //let req: &str = unsafe { mem::transmute((&buf2, n)) };
@@ -141,6 +125,8 @@ fn handle_client<T: Read + Write + Debug>(mut stream: T) {
         },
         Err(e) => println!("err: {}", e),
     }
+
+
 
     //let req = String::from_utf8(buf2).unwrap();
 
@@ -154,9 +140,9 @@ fn handle_client<T: Read + Write + Debug>(mut stream: T) {
 
         match err {
             Ok(n) => {
+                println!("{:?}", stream);
                 if n == 0 { break; }
-                println!("ok: {}", n);
-                print_hex(&buf, n);
+                print_hex(&buf[..n]);
                 let f = Frame::new(&buf[..n]);
                 println!("{:?}", f);
 
@@ -205,6 +191,10 @@ fn main() {
     ctx.set_private_key_file("test/server.key", openssl::x509::X509FileType::PEM).unwrap();
     ctx.set_alpn_protocols(&[b"h2"]);
 
+    // temp huffman usage just cause
+    let mut huf = Huffman::new();
+    let dec = huf.decode(b"123123");
+    huf.size();
     //let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
     //println!("listening started, ready to accept");
     //for stream in listener.incoming() {
@@ -230,7 +220,9 @@ fn main() {
             Ok(mut stream) => {
                 let tls = Ssl::new(&ctx).unwrap();
                 thread::spawn(move|| {
+                    println!("{:?}", stream);
                     if let Ok(tls_stream) = SslStream::accept(tls, &stream) {
+                        println!("{:?}", tls_stream);
                         handle_client(tls_stream);
                         return;
                     }
