@@ -44,7 +44,8 @@ impl<'a> Huffman<'a> {
     pub fn decode(&self, buf: &[u8]) -> Vec<u8> {
         // create vec with enough space for most of the decoded buf
         // some reallocation will probably happen with current implementation
-        let mut vec = Vec::with_capacity(buf.len());
+        let decode_size: usize = f32::ceil(buf.len() as f32 * 1.5) as usize;
+        let mut decoded = Vec::with_capacity(decode_size);
 
         let bits = BitItor::new(buf);
 
@@ -63,7 +64,7 @@ impl<'a> Huffman<'a> {
             // check if the curently read bits are a valid huffman code
             match self.decode_table.get(&(code, size)) {
                 Some(val)   => {
-                    vec.push(*val);
+                    decoded.push(*val);
                     code = 0;
                     size = 0;
                 },
@@ -71,7 +72,13 @@ impl<'a> Huffman<'a> {
             }
         }
 
-        vec
+        let len = decoded.len();
+        let cap = decoded.capacity();
+
+        println!("decoded len: {} AND decoded capacity {}", len, cap);
+        println!("len capacity ratio: {}", len as f32 / cap as f32);
+
+        decoded
     }
 }
 

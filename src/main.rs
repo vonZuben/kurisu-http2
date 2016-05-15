@@ -15,12 +15,11 @@ use std::fmt::Debug;
 //use std::mem;
 
 mod huffman;
-
 use huffman::Huffman;
 
 mod frame;
-
 use frame::Frame;
+use frame::headers::Header;
 
 mod bititor;
 
@@ -150,8 +149,12 @@ fn handle_client<T: Read + Write + Debug>(mut stream: T) {
                     let b = [0u8, 0, 0, 4, 1, 0, 0, 0, 0];
                     stream.write(&b).unwrap();
 
+                    let header = Header::new(&f.payload);
+
+                    println!("{:?}", header);
+
                     let huffman = Huffman::new();
-                    let decoded = huffman.decode(&f.payload[6..]);
+                    let decoded = huffman.decode(header.header_frag);
 
                     println!("{}", str::from_utf8(&decoded).unwrap() );
                 }
