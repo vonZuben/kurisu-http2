@@ -14,12 +14,10 @@ use std::fmt::Debug;
 
 //use std::mem;
 
-mod huffman;
-use huffman::Huffman;
-
 mod frame;
 use frame::Frame;
 use frame::headers::Header;
+use frame::headers::huffman::Huffman;
 
 mod bititor;
 

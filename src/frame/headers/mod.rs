@@ -28,6 +28,9 @@
 //!
 
 use std::mem;
+use std::borrow::Cow;
+
+pub mod huffman;
 
 mod integers;
 
@@ -52,6 +55,13 @@ impl<'a> Header<'a> {
     }
 }
 
+//struct HeaderList {
+//    list:
+//}
+
+fn process_header<'a>(header: &'a Header) {
+
+}
 
 /// 6.1 Indexed Header Field Representation
 /// An indexed header field representation identifies an entry in either the static table or the dynamic table (see Section 2.3).
@@ -68,6 +78,8 @@ impl<'a> Header<'a> {
 ///
 /// The index value of 0 is not used. It MUST be treated as a decoding error if found in an indexed header field representation.
 ///
+
+
 /// 6.2 Literal Header Field Representation
 /// A literal header field representation contains a literal header field value. Header field names are provided either as a literal or by reference to an existing table entry, either from the static table or the dynamic table (see Section 2.3).
 ///
@@ -196,4 +208,71 @@ impl<'a> Header<'a> {
 ///
 /// Reducing the maximum size of the dynamic table can cause entries to be evicted (see Section 4.3).
 
-struct Tmp;
+struct HeaderEntry<'a> {
+    name: Cow<'a, str>,
+    value: Cow<'a, str>,
+}
+
+static STATIC_TABLE: &'static [HeaderEntry<'static>] = &[
+    HeaderEntry { name: Cow::Borrowed(":authority"),                  value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed(":method"), 	                  value: Cow::Borrowed("GET") },
+    HeaderEntry { name: Cow::Borrowed(":method"), 	                  value: Cow::Borrowed("POST") },
+    HeaderEntry { name: Cow::Borrowed(":path"), 	                  value: Cow::Borrowed("/") },
+    HeaderEntry { name: Cow::Borrowed(":path"), 	                  value: Cow::Borrowed("/index.html") },
+    HeaderEntry { name: Cow::Borrowed(":scheme"), 	                  value: Cow::Borrowed("http") },
+    HeaderEntry { name: Cow::Borrowed(":scheme"), 	                  value: Cow::Borrowed("https") },
+    HeaderEntry { name: Cow::Borrowed(":status"), 	                  value: Cow::Borrowed("200") },
+    HeaderEntry { name: Cow::Borrowed(":status"), 	                  value: Cow::Borrowed("204") },
+    HeaderEntry { name: Cow::Borrowed(":status"), 	                  value: Cow::Borrowed("206") },
+    HeaderEntry { name: Cow::Borrowed(":status"), 	                  value: Cow::Borrowed("304") },
+    HeaderEntry { name: Cow::Borrowed(":status"), 	                  value: Cow::Borrowed("400") },
+    HeaderEntry { name: Cow::Borrowed(":status"), 	                  value: Cow::Borrowed("404") },
+    HeaderEntry { name: Cow::Borrowed(":status"), 	                  value: Cow::Borrowed("500") },
+    HeaderEntry { name: Cow::Borrowed("accept-charset"),              value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("accept-encoding"), 	          value: Cow::Borrowed("gzip, deflate") },
+    HeaderEntry { name: Cow::Borrowed("accept-language"),             value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("accept-ranges"),               value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("accept"),                      value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("access-control-allow-origin"), value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("age"),                         value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("allow"),                       value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("authorization"),               value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("cache-control"),               value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("content-disposition"),         value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("content-encoding"),            value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("content-language"),            value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("content-length"),              value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("content-location"),            value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("content-range"),               value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("content-type"),                value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("cookie"),                      value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("date"),                        value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("etag"),                        value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("expect"),                      value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("expires"),                     value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("from"),                        value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("host"),                        value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("if-match"),                    value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("if-modified-since"),           value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("if-none-match"),               value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("if-range"),                    value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("if-unmodified-since"),         value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("last-modified"),               value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("link"),                        value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("location"),                    value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("max-forwards"),                value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("proxy-authenticate"),          value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("proxy-authorization"),         value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("range"),                       value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("referer"),                     value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("refresh"),                     value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("retry-after"),                 value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("server"),                      value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("set-cookie"),                  value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("strict-transport-security"),   value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("transfer-encoding"),           value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("user-agent"),                  value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("vary"),                        value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("via"),                         value: Cow::Borrowed("") },
+    HeaderEntry { name: Cow::Borrowed("www-authenticate"),            value: Cow::Borrowed("") },
+    ];
