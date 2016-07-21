@@ -97,6 +97,8 @@ fn print_hex(buf: &[u8]) {
 fn handle_client<T: Read + Write + Debug>(mut stream: T) {
 
     let mut buf: Vec<u8> = Vec::with_capacity(512);
+    // this is here because the read to end function does not work with network stream (never ends),
+    // and don't want to emmty initialize the vector cause that is a waste.
     unsafe { buf.set_len(512); }
 
     //let mut buf2 = [0u8; 512];
@@ -235,7 +237,7 @@ fn main() {
                     println!("NOT TLS");
                     //let mut b: [u8;512] = unsafe { mem::uninitialized() };
                     //let n = stream.read(&mut b).unwrap();
-                    stream.write_all(b"HTTP/1.1 301 Moved Permanently\r\nLocation: https://127.0.0.1:8080\r\n\r\n").unwrap();
+                    stream.write_all(b"HTTP/1.1 301 Moved Permanently\r\nLocation: https://localhost:8080\r\n\r\n").unwrap();
                     //println!("size: {}: {}", n, str::from_utf8(&b[..n]).unwrap());
                     stream.shutdown(std::net::Shutdown::Both).unwrap();
                 });

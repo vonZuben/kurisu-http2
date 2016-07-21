@@ -47,7 +47,7 @@ impl<'a> Header<'a> {
     pub fn new(buf: &'a[u8]) -> Self {
         Header {
             pad_l: buf[0],
-            exclusive: buf[1] & 0x80 != 0x0,
+            exclusive: buf[1] & 0x80 != 0x00,
             stream_dep: u32::from_le( unsafe { mem::transmute([ buf[4], buf[3], buf[2], buf[1] & 0x7F ]) } ),
             weight: buf[5],
             header_frag: &buf[6..],
@@ -208,6 +208,7 @@ fn process_header<'a>(header: &'a Header) {
 ///
 /// Reducing the maximum size of the dynamic table can cause entries to be evicted (see Section 4.3).
 
+/// Header Definition for static and dynamic tables
 struct HeaderEntry<'a> {
     name: Cow<'a, str>,
     value: Cow<'a, str>,

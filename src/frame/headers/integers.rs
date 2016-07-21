@@ -121,12 +121,12 @@ mod tests {
         let num = decode_integer(&tst_num, 8).unwrap();
         assert_eq!(num, 65);
 
-        // more complet number
+        // complex number
         let tst_num = vec![0xFF, 0x05];
         let num = decode_integer(&tst_num, 8).unwrap();
         assert_eq!(num, 260);
 
-        // more complet number
+        // more complex number
         let tst_num = vec![0xFF, 0x9A, 0x0A];
         let num = decode_integer(&tst_num, 5).unwrap();
         assert_eq!(num, 1337);
