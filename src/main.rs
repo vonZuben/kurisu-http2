@@ -1,5 +1,8 @@
 extern crate openssl;
 
+#[macro_use]
+mod debug;
+
 use openssl::ssl::*;
 
 use std::net::{TcpListener};
@@ -201,7 +204,6 @@ fn main() {
     // temp huffman usage just cause
     let mut huf = Huffman::new();
     let _ = huf.decode(b"123123");
-    huf.size();
     //let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
     //println!("listening started, ready to accept");
     //for stream in listener.incoming() {
