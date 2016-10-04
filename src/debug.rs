@@ -1,27 +1,42 @@
-#![allow(dead_code)]
+//! At the time of creating this, using debug_assertions is experimental
+//! on blocks of code within functions. This allows me to get the debug_assertions
+//! behaviour on any arbitrary expressions.
 
-mod dp {
-    use std::fmt::Debug;
+use std::fmt::Debug;
 
-    #[cfg(debug)]
-    #[inline(always)]
-    fn debug_print<T: Debug>(item: T) {
-        println!("{:?}", item);
-    }
-
-    #[cfg(not(debug))]
-    #[inline(always)]
-    fn debug_print<T: Debug>(_: T) {
-        //noop!();
-        println!("hello");
-    }
+/// A macro to wrap around arbitrary expressions
+/// that should only be run in debug builds
+#[cfg(debug_assertions)]
+#[macro_export]
+macro_rules! drun {
+    ( $run:expr ) => {
+        {
+            println!("=================");
+            $run
+            println!("=================");
+        }
+    };
 }
 
-
-macro_rules! debug {
-    ($d:ident) => (
-        //::dp::debug_print($d);
-        unimplemented!();
-    )
+/// No-op version of the macro for release builds
+#[cfg(not(debug_assertions))]
+#[macro_export]
+macro_rules! drun {
+    ( $run:expr ) => { };
 }
 
+#[cfg(test)]
+mod debug_print_tests {
+    #[test]
+    fn drun_test() {
+        let mut a = 0i32;
+
+        drun!({ println!("drun"); a = 5i32; });
+
+        debug_assert_eq!(a, 5);
+
+        a = 10i32;
+
+        assert_eq!(a, 10);
+    }
+}
