@@ -73,8 +73,6 @@ fn decode_integer(buf: &[u8], prefix_size: u8) -> Result<u32, HPACK_INTEGER_ERRO
         return Ok(value);
     }
 
-    println!("first {}", value);
-
     // The value does not fit into the prefix bits, so we read as many following
     // bytes as necessary to decode the integer.
     // Already one byte used (the prefix)
@@ -89,9 +87,6 @@ fn decode_integer(buf: &[u8], prefix_size: u8) -> Result<u32, HPACK_INTEGER_ERRO
         total += 1;
         value += ((b & 127) as u32) * (1 << m);
         m += 7;
-
-        println!("b: {}", b);
-        println!("value: {}", value);
 
         if b & 128 != 128 {
             // Most significant bit is not set => no more continuation bytes

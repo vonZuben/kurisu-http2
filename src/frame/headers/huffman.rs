@@ -23,6 +23,15 @@ impl<'a> Huffman<'a> {
             hash_map.insert(table[i], i as u8);
         }
 
+        drun!({ // checking the memory efficiency of the huffman encoder/decoder
+            use std::mem;
+            println!("huffman static table len: {}", len);
+            println!("huffman table hasmap:\nmain size bytes {} :: Table size bytes {} :: Capacity {}",
+                     mem::size_of::<Self>(),
+                     mem::size_of_val(&hash_map.entry((0x1ff8, 13))) * hash_map.capacity(),
+                     hash_map.capacity());
+        });
+
         Huffman {
             decode_table: hash_map,
             encode_table: table,
@@ -31,14 +40,6 @@ impl<'a> Huffman<'a> {
 
     pub fn new() -> Self {
         Huffman::with_table(HUFFMAN_TABLE)
-    }
-
-    pub fn size(&mut self) {
-        use std::mem;
-        println!("main size {} :: Table size {} :: Capacity {}",
-                 mem::size_of::<Self>(),
-                 mem::size_of_val(&self.decode_table.entry((0x1ff8, 13))) * self.decode_table.capacity(),
-                 self.decode_table.capacity());
     }
 
     pub fn decode(&self, buf: &[u8]) -> Vec<u8> {
@@ -72,11 +73,13 @@ impl<'a> Huffman<'a> {
             }
         }
 
-        let len = decoded.len();
-        let cap = decoded.capacity();
+        drun!( {
+            let len = decoded.len();
+            let cap = decoded.capacity();
 
-        println!("decoded len: {} AND decoded capacity {}", len, cap);
-        println!("len capacity ratio: {}", len as f32 / cap as f32);
+            println!("decoded len: {} AND decoded capacity {}", len, cap);
+            println!("len capacity ratio: {}", len as f32 / cap as f32);
+        } );
 
         decoded
     }
