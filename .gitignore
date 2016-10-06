@@ -1,3 +1,13 @@
 target
 Cargo.lock
 *.swp
+
+server.key
+server.crt
+server.srl
+server.csr
+
+rootCA.key
+rootCA.crt
+rootCA.srl
+rootCA.csr
