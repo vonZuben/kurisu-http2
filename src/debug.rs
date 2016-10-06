@@ -2,7 +2,6 @@
 //! on blocks of code within functions. This allows me to get the debug_assertions
 //! behaviour on any arbitrary expressions.
 
-use std::fmt::Debug;
 
 /// A macro to wrap around arbitrary expressions
 /// that should only be run in debug builds
