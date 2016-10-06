@@ -352,7 +352,7 @@ mod huffman_tests {
     use std::str;
 
     #[test]
-    fn decode_test() {
+    fn decode_test1() {
         let encoded = [0x08, 0x9D, 0x5C, 0x0B, 0x81, 0x70, 0xDC, 0x78, 0x0F, 0x03];
 
         let huff = Huffman::new();
@@ -361,5 +361,17 @@ mod huffman_tests {
         println!("decoded value: {}", str::from_utf8(&decoded).unwrap());
 
         assert_eq!(decoded, b"127.0.0.1:8080");
+    }
+
+    #[test]
+    fn decode_test2() {
+        let encoded = [0xA0, 0xE4, 0x1D, 0x13, 0x9D, 0x09, 0xB8, 0xF0, 0x1E, 0x07];
+
+        let huff = Huffman::new();
+        let decoded = huff.decode(&encoded);
+
+        println!("decoded value: {}", str::from_utf8(&decoded).unwrap());
+
+        assert_eq!(decoded, b"localhost:8080");
     }
 }
