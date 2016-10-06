@@ -152,7 +152,7 @@ fn handle_client<T: Read + Write + Debug>(mut stream: T) {
                     let b = [0u8, 0, 0, 4, 1, 0, 0, 0, 0];
                     stream.write(&b).unwrap();
 
-                    let header = Header::new(&f.payload);
+                    let header = Header::new(&f);
 
                     println!("{:?}", header);
 

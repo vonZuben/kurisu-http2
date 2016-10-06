@@ -1,68 +1,127 @@
-//! +---------------+
-//!  |Pad Length? (8)|
-//!  +-+-------------+-----------------------------------------------+
-//!  |E|                 Stream Dependency? (31)                     |
-//!  +-+-------------+-----------------------------------------------+
-//!  |  Weight? (8)  |
-//!  +-+-------------+-----------------------------------------------+
-//!  |                   Header Block Fragment (*)                 ...
-//!  +---------------------------------------------------------------+
-//!  |                           Padding (*)                       ...
-//!  +---------------------------------------------------------------+
-//! Figure 7: HEADERS Frame Payload
-//!
-//! The HEADERS frame payload has the following fields:
-//!
-//! Pad Length:
-//! An 8-bit field containing the length of the frame padding in units of octets. This field is only present if the PADDED flag is set.
-//! E:
-//! A single-bit flag indicating that the stream dependency is exclusive (see Section 5.3). This field is only present if the PRIORITY flag is set.
-//! Stream Dependency:
-//! A 31-bit stream identifier for the stream that this stream depends on (see Section 5.3). This field is only present if the PRIORITY flag is set.
-//! Weight:
-//! An unsigned 8-bit integer representing a priority weight for the stream (see Section 5.3). Add one to the value to obtain a weight between 1 and 256. This field is only present if the PRIORITY flag is set.
-//! Header Block Fragment:
-//! A header block fragment (Section 4.3).
-//! Padding:
-//! Padding octets.
-//!
-
 use std::mem;
 use std::borrow::Cow;
+
+use frame::Frame;
 
 pub mod huffman;
 
 mod integers;
 
+/// ===============================
+/// HEADER FLAGS
+/// ===============================
+///
+/// END_STREAM (0x1):
+/// When set, bit 0 indicates that the header block (Section 4.3) is the last that the endpoint will send for the identified stream.
+///
+/// A HEADERS frame carries the END_STREAM flag that signals the end of a stream. However, a HEADERS frame with the END_STREAM flag set can be followed by CONTINUATION frames on the same stream. Logically, the CONTINUATION frames are part of the HEADERS frame.
+///
+/// END_HEADERS (0x4):
+/// When set, bit 2 indicates that this frame contains an entire header block (Section 4.3) and is not followed by any CONTINUATION frames.
+///
+/// A HEADERS frame without the END_HEADERS flag set MUST be followed by a CONTINUATION frame for the same stream. A receiver MUST treat the receipt of any other type of frame or a frame on a different stream as a connection error (Section 5.4.1) of type PROTOCOL_ERROR.
+///
+/// PADDED (0x8):
+/// When set, bit 3 indicates that the Pad Length field and any padding that it describes are present.
+///
+/// PRIORITY (0x20):
+/// When set, bit 5 indicates that the Exclusive Flag (E), Stream Dependency, and Weight fields are present; see Section 5.3.
+
+const END_STREAM : u8 = 0x1;
+const END_HEADERS : u8 = 0x4;
+const PADDED : u8 = 0x8;
+const PRIORITY : u8 = 0x20;
+
+/// ===============================
+/// MAIN HEADER DEFINITION
+/// ===============================
+///
+/// +---------------+
+///  |Pad Length? (8)|
+///  +-+-------------+-----------------------------------------------+
+///  |E|                 Stream Dependency? (31)                     |
+///  +-+-------------+-----------------------------------------------+
+///  |  Weight? (8)  |
+///  +-+-------------+-----------------------------------------------+
+///  |                   Header Block Fragment (*)                 ...
+///  +---------------------------------------------------------------+
+///  |                           Padding (*)                       ...
+///  +---------------------------------------------------------------+
+/// Figure 7: HEADERS Frame Payload
+///
+/// The HEADERS frame payload has the following fields:
+///
+/// Pad Length:
+/// An 8-bit field containing the length of the frame padding in units of octets. This field is only present if the PADDED flag is set.
+/// E:
+/// A single-bit flag indicating that the stream dependency is exclusive (see Section 5.3). This field is only present if the PRIORITY flag is set.
+/// Stream Dependency:
+/// A 31-bit stream identifier for the stream that this stream depends on (see Section 5.3). This field is only present if the PRIORITY flag is set.
+/// Weight:
+/// An unsigned 8-bit integer representing a priority weight for the stream (see Section 5.3). Add one to the value to obtain a weight between 1 and 256. This field is only present if the PRIORITY flag is set.
+/// Header Block Fragment:
+/// A header block fragment (Section 4.3).
+/// Padding:
+/// Padding octets.
+
 #[derive(Debug)]
 pub struct Header<'a>{
-    pub pad_l: u8,
-    pub exclusive: bool,
-    pub stream_dep: u32,
-    pub weight: u8,
+    pub pad_l: Option<u8>,
+    pub exclusive: Option<bool>,
+    pub stream_dep: Option<u32>,
+    pub weight: Option<u8>,
     pub header_frag: &'a[u8],
 }
 
 impl<'a> Header<'a> {
-    pub fn new(buf: &'a[u8]) -> Self {
-        Header {
-            pad_l: buf[0],
-            exclusive: buf[1] & 0x80 != 0x00,
-            stream_dep: u32::from_le( unsafe { mem::transmute([ buf[4], buf[3], buf[2], buf[1] & 0x7F ]) } ),
-            weight: buf[5],
-            header_frag: &buf[6..],
+    pub fn new(frame: &Frame<'a>) -> Self {
+        let buf = frame.payload;
+
+        const PAD_PRIO : u8 = PADDED | PRIORITY;
+        let flags = frame.f_flags & PAD_PRIO;
+
+        // check what flags are set in order to determine which fields are present in the header
+        match flags {
+            PAD_PRIO => Header { // All fields are present
+                pad_l: Some(buf[0]),
+                exclusive: Some(buf[1] & 0x80 != 0x00),
+                stream_dep: Some(u32::from_le( unsafe { mem::transmute([ buf[4], buf[3], buf[2], buf[1] & 0x7F ]) } )),
+                weight: Some(buf[5]),
+                header_frag: &buf[6..],
+            },
+            PADDED => Header { // Only the Padding field is present
+                pad_l: Some(buf[0]),
+                exclusive: None,
+                stream_dep: None,
+                weight: None,
+                header_frag: &buf[1..],
+            },
+            PRIORITY => Header { // Only the Priority fields are present
+                pad_l: None,
+                exclusive: Some(buf[0] & 0x80 != 0x00),
+                stream_dep: Some(u32::from_le( unsafe { mem::transmute([ buf[3], buf[2], buf[3], buf[0] & 0x7F ]) } )),
+                weight: Some(buf[4]),
+                header_frag: &buf[5..],
+            },
+            _ => Header { // neither the Padding or Priority fields are present
+                pad_l: None,
+                exclusive: None,
+                stream_dep: None,
+                weight: None,
+                header_frag: &buf[0..],
+            },
         }
     }
 }
-
-//struct HeaderList {
-//    list:
-//}
 
 fn process_header<'a>(header: &'a Header) {
 
 }
 
+/// ===============================
+/// HEADER FRAGMENT FORMATS
+/// ===============================
+///
 /// 6.1 Indexed Header Field Representation
 /// An indexed header field representation identifies an entry in either the static table or the dynamic table (see Section 2.3).
 ///
@@ -277,3 +336,23 @@ static STATIC_TABLE: &'static [HeaderEntry<'static>] = &[
     HeaderEntry { name: Cow::Borrowed("via"),                         value: Cow::Borrowed("") },
     HeaderEntry { name: Cow::Borrowed("www-authenticate"),            value: Cow::Borrowed("") },
     ];
+
+#[cfg(test)]
+mod header_tests {
+    use frame::Frame;
+    use frame::headers::Header;
+
+    #[test]
+    fn new_header_unpadded() {
+        let tst_frame : &[u8] = &[0x00, 0x00, 0xEE, 0x01, 0x25, 0x00, 0x00, 0x00, 0x01, 0x80, 0x00, 0x00, 0x00, 0xFF, 0x82, 0x41, 0x8A, 0xA0, 0xE4, 0x1D, 0x13, 0x9D, 0x09, 0xB8, 0xF0, 0x1E, 0x07, 0x87, 0x84, 0x40, 0x85, 0xAE, 0xC1, 0xCD, 0x48, 0xFF, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x58, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x40, 0x92, 0xB6, 0xB9, 0xAC, 0x1C, 0x85, 0x58, 0xD5, 0x20, 0xA4, 0xB6, 0xC2, 0xAD, 0x61, 0x7B, 0x5A, 0x54, 0x25, 0x1F, 0x01, 0x31, 0x7A, 0xD1, 0xD0, 0x7F, 0x66, 0xA2, 0x81, 0xB0, 0xDA, 0xE0, 0x53, 0xFA, 0xFC, 0x08, 0x7E, 0xD4, 0xCE, 0x6A, 0xAD, 0xF2, 0xA7, 0x97, 0x9C, 0x89, 0xC6, 0xBF, 0xB5, 0x21, 0xAE, 0xBA, 0x0B, 0xC8, 0xB1, 0xE6, 0x32, 0x58, 0x6D, 0x97, 0x57, 0x65, 0xC5, 0x3F, 0xAC, 0xD8, 0xF7, 0xE8, 0xCF, 0xF4, 0xA5, 0x06, 0xEA, 0x55, 0x31, 0x14, 0x9D, 0x4F, 0xFD, 0xA9, 0x7A, 0x7B, 0x0F, 0x49, 0x58, 0x6D, 0x95, 0xC0, 0xB8, 0x9D, 0x79, 0xB5, 0xC2, 0xD3, 0x2A, 0x6E, 0x1C, 0xA3, 0xB0, 0xCC, 0x36, 0xCB, 0xAB, 0xB2, 0xE7, 0x53, 0xB8, 0x49, 0x7C, 0xA5, 0x89, 0xD3, 0x4D, 0x1F, 0x43, 0xAE, 0xBA, 0x0C, 0x41, 0xA4, 0xC7, 0xA9, 0x8F, 0x33, 0xA6, 0x9A, 0x3F, 0xDF, 0x9A, 0x68, 0xFA, 0x1D, 0x75, 0xD0, 0x62, 0x0D, 0x26, 0x3D, 0x4C, 0x79, 0xA6, 0x8F, 0xBE, 0xD0, 0x01, 0x77, 0xFE, 0x8D, 0x48, 0xE6, 0x2B, 0x1E, 0x0B, 0x1D, 0x7F, 0x5F, 0x2C, 0x7C, 0xFD, 0xF6, 0x80, 0x0B, 0xBD, 0x50, 0x92, 0x9B, 0xD9, 0xAB, 0xFA, 0x52, 0x42, 0xCB, 0x40, 0xD2, 0x5F, 0xA5, 0x11, 0x21, 0x27, 0xFA, 0x52, 0x3B, 0x3F, 0x51, 0x8B, 0x2D, 0x4B, 0x70, 0xDD, 0xF4, 0x5A, 0xBE, 0xFB, 0x40, 0x05, 0xDE];
+
+        let frame = Frame::new(&tst_frame);
+
+        let header = Header::new(&frame);
+
+        assert_eq!(header.pad_l, None);
+        assert_eq!(header.exclusive, Some(true));
+        assert_eq!(header.stream_dep, Some(0));
+        assert_eq!(header.weight, Some(255));
+    }
+}
