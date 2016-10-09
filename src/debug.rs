@@ -6,7 +6,6 @@
 /// A macro to wrap around arbitrary expressions
 /// that should only be run in debug builds
 #[cfg(debug_assertions)]
-#[macro_export]
 macro_rules! drun {
     ( $run:expr ) => {
         {
@@ -19,13 +18,13 @@ macro_rules! drun {
 
 /// No-op version of the macro for release builds
 #[cfg(not(debug_assertions))]
-#[macro_export]
 macro_rules! drun {
     ( $run:expr ) => { };
 }
 
 #[cfg(test)]
 mod debug_print_tests {
+    #[allow(unused_assignments)]
     #[test]
     fn drun_test() {
         let mut a = 0i32;
