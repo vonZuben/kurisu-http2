@@ -38,8 +38,14 @@
 
 use std::mem;
 
+use buf::Buf;
+
+mod ftype;
+use self::ftype::Ftype;
+
 pub mod headers;
 
+// this is an old implementation of an http2 frame (will be deleted later)
 #[derive(Debug)]
 pub struct Frame<'a> {
     pub length: u32,
@@ -58,5 +64,120 @@ impl<'a> Frame<'a> {
             s_identifier: u32::from_le( unsafe { mem::transmute([ buf[8], buf[7], buf[6], buf[5] & 0x7F ]) } ),
             payload: &buf[9..],
         }
+    }
+}
+
+/// The Basic methods defined for all types of HTTP2 Frames.
+/// The types that define more specific Frames all implement this
+/// and by extension must implement Buf
+trait Http2Frame : Buf<u8> {
+
+    // immutable functions for Http2Frame
+    // =============================
+    fn get_length(&self) -> u32 {
+        let buf = self.buf();
+        u32::from_be( unsafe { mem::transmute([ 0u8, buf[0], buf[1], buf[2] ]) } )
+    }
+
+    fn get_type(&self) -> u8 {
+        self.buf()[3]
+    }
+
+    fn get_flags(&self) -> u8 {
+        self.buf()[4]
+    }
+
+    fn get_s_identifier(&self) -> u32 {
+        let buf = self.buf();
+        u32::from_be( unsafe { mem::transmute([ buf[5] & 0x7F, buf[6], buf[7], buf[8] ]) } )
+    }
+
+    fn payload(&self) -> &[u8] {
+        &self.buf()[9..]
+    }
+
+    // mutable functions for Http2Frame
+    // =============================
+    fn set_length(&mut self, len: u32) {
+        let len_u8 : &[u8; 4] = unsafe { mem::transmute(&len.to_be()) };
+        debug_assert_eq!(len_u8[0], 0);
+        let buf = self.mut_buf();
+        buf[0] = len_u8[1];
+        buf[1] = len_u8[2];
+        buf[2] = len_u8[3];
+    }
+
+    fn set_type(&mut self, f_type: u8) {
+        self.mut_buf()[3] = f_type;
+    }
+
+    fn set_flags(&mut self, f_flags: u8) {
+        self.mut_buf()[4] = f_flags;
+    }
+
+    fn set_s_identifier(&mut self, s_identifier: u32) {
+        let ident_u8 : &[u8; 4] = unsafe { mem::transmute(&s_identifier.to_be()) };
+        debug_assert_eq!(ident_u8[0] & 0x80, 0);
+        let buf = self.mut_buf();
+        buf[5] = ident_u8[0];
+        buf[6] = ident_u8[1];
+        buf[7] = ident_u8[2];
+        buf[8] = ident_u8[3];
+    }
+
+    fn mut_payload(&mut self) -> &mut [u8] {
+        &mut self.mut_buf()[9..]
+    }
+}
+
+#[cfg(test)]
+mod http2_frame_tests {
+
+    use buf::Buf;
+    use super::Http2Frame;
+
+    // test frame with invalid payload and length
+    // (just to check if fields are read and written properly)
+    static TST_FRAME : &'static[u8] = &[0x00, 0x00, 0xEE, 0x01, 0x25, 0x00, 0x00, 0x00, 0x01, 0x80];
+
+    // test implementation for https frames with no additional functionality
+    struct TstFrameImpl {
+        buf: Vec<u8>,
+    }
+
+    impl_buf!( u8 : buf => TstFrameImpl ; );
+
+    impl Http2Frame for TstFrameImpl {}
+
+    #[test]
+    fn read_frame_test() {
+        let mut buf : Vec<u8> = Vec::with_capacity(TST_FRAME.len());
+
+        for byte in TST_FRAME {
+            buf.push(*byte);
+        }
+
+        let frame = TstFrameImpl{ buf: buf };
+
+        assert_eq!(frame.get_length(), 238);
+        assert_eq!(frame.get_type(), 1);
+        assert_eq!(frame.get_flags(), 0x25);
+        assert_eq!(frame.get_s_identifier(), 1);
+        assert_eq!(frame.payload()[..], TST_FRAME[9..]);
+    }
+
+    #[test]
+    fn write_frame_test(){
+        let buf : Vec<u8> = vec![0;10];
+
+        let mut frame = TstFrameImpl{ buf: buf };
+
+        frame.set_length(238);
+        frame.set_type(1);
+        frame.set_flags(0x25);
+        frame.set_s_identifier(1);
+        frame.mut_payload()[0] = 0x80;
+
+        assert_eq!(frame.buf[..], TST_FRAME[..]);
     }
 }

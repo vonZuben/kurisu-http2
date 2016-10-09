@@ -3,6 +3,11 @@ extern crate openssl;
 #[macro_use]
 mod debug;
 
+#[macro_use]
+mod buf;
+
+mod hpack;
+
 use openssl::ssl::*;
 
 use std::net::{TcpListener};
@@ -19,10 +24,12 @@ use std::fmt::Debug;
 
 mod frame;
 use frame::Frame;
-use frame::headers::Header;
-use frame::headers::huffman::Huffman;
+use frame::headers::HeaderFrame;
+use hpack::huffman::Huffman;
 
 mod bititor;
+
+mod request;
 
 //#[path = "ssl.rs"]
 //mod ssl;
@@ -152,7 +159,7 @@ fn handle_client<T: Read + Write + Debug>(mut stream: T) {
                     let b = [0u8, 0, 0, 4, 1, 0, 0, 0, 0];
                     stream.write(&b).unwrap();
 
-                    let header = Header::new(&f);
+                    let header = HeaderFrame::new(&f);
 
                     println!("{:?}", header);
 
