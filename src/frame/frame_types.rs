@@ -5,33 +5,25 @@ use super::Http2Frame;
 
 /// Type used to read initial data from peer.
 /// Used to determine type of frame for further specialization
-pub struct GenericFrame {
-    buf: Vec<u8>,
+pub struct GenericFrame<'buf> {
+    buf: &'buf mut [u8],
 }
 
 impl_buf!( u8 : buf => GenericFrame; );
-impl Http2Frame for GenericFrame {}
+impl<'obj, 'buf> Http2Frame<'obj, 'buf> for GenericFrame<'buf> where 'buf: 'obj {}
 
-impl fmt::Debug for GenericFrame {
+impl<'a> fmt::Debug for GenericFrame<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "length: {}, type: 0x{:02X}, flags: 0x{:02X}, s_ident: {}, payload {:?}",
                self.get_length(), self.get_type(), self.get_flags(), self.get_s_identifier(), self.payload())
     }
 }
 
-impl<T> From<T> for GenericFrame
-    where T: Into<Vec<u8>> {
-
-    fn from(buf: T) -> Self {
-        GenericFrame { buf: buf.into() }
-    }
-}
-
 macro_rules! impl_frame_type {
     ( $typename:ident ) => {
-        impl Into<$typename> for GenericFrame {
-            fn into(mut self) -> $typename {
-                $typename { buf: mem::replace(&mut self.buf, Vec::new()) }
+        impl<'a> Into<$typename<'a>> for GenericFrame<'a> {
+            fn into(mut self) -> $typename<'a> {
+                $typename { buf: mem::replace(&mut self.buf, &mut []) }
             }
         }
     }
@@ -40,8 +32,8 @@ macro_rules! impl_frame_type {
 macro_rules! impl_buf_frame {
     ( $($typename:ident),+ ) => {
         $(
-            impl_buf!( u8 : buf => $typename ; );
-            impl Http2Frame for $typename {}
+            impl_buf!( u8 : buf => $typename; );
+            impl<'obj, 'buf> Http2Frame<'obj, 'buf> for $typename<'buf> where 'buf: 'obj {}
             impl_frame_type!( $typename );
         )*
     }
@@ -121,15 +113,15 @@ enum PadPrioState {
     Neither,
 }
 
-pub struct HeadersFrame {
-    buf: Vec<u8>,
+pub struct HeadersFrame<'buf> {
+    buf: &'buf mut [u8],
 }
 
-impl HeadersFrame where HeadersFrame: Http2Frame{
+impl<'obj, 'buf> HeadersFrame<'buf> where HeadersFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj{
 
     // private utility functions
     // =============================
-    fn pad_prio_flags(&self) -> PadPrioState {
+    fn pad_prio_flags(&'obj self) -> PadPrioState {
         use self::PadPrioState::*;
         const PAD_PRIO : u8 = PADDED | PRIORITY;
         let flags = self.get_flags() & PAD_PRIO;
@@ -144,14 +136,14 @@ impl HeadersFrame where HeadersFrame: Http2Frame{
 
     // immutable functions
     // =============================
-    pub fn get_pad_length(&self) -> Option<u8> {
+    pub fn get_pad_length(&'obj self) -> Option<u8> {
         use self::PadPrioState::*;
         match self.pad_prio_flags() {
             PaddedOnly | Both => Some(self.payload()[0]),
             _                 => None,
         }
     }
-    pub fn get_priority_info(&self) -> Option<(bool, u32, u8)> {
+    pub fn get_priority_info(&'obj self) -> Option<(bool, u32, u8)> {
         use self::PadPrioState::*;
         let buf = match self.pad_prio_flags() {
             PriorityOnly => &self.payload()[0..5],
@@ -163,7 +155,7 @@ impl HeadersFrame where HeadersFrame: Http2Frame{
         let weight = buf[4];
         Some((exclusive, stream_dep & 0x7FFFFFFF, weight))
     }
-    pub fn get_header_block_fragment(&self) -> &[u8] {
+    pub fn get_header_block_fragment(&'obj self) -> &[u8] {
         use self::PadPrioState::*;
         match self.pad_prio_flags() {
             Neither      => &self.payload()[0..],
@@ -179,14 +171,15 @@ mod frame_type_tests {
 
     use super::GenericFrame;
     use super::HeadersFrame;
+    use buf::Buf;
 
     #[test]
     fn tmp_test() {
-        let buf = vec![0x00, 0x00, 0xEE, 0x01, 0x2D, 0x00, 0x00, 0x00, 0x01, 0x0F, 0x80, 0x00, 0x00, 0x1F, 0xFF, 0x82, 0x41, 0x8A, 0xA0, 0xE4, 0x1D, 0x13, 0x9D, 0x09, 0xB8, 0xF0, 0x1E, 0x07, 0x87, 0x84, 0x40, 0x85, 0xAE, 0xC1, 0xCD, 0x48, 0xFF, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x58, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x40, 0x92, 0xB6, 0xB9, 0xAC, 0x1C, 0x85, 0x58, 0xD5];
+        let mut buf = vec![0x00, 0x00, 0xEE, 0x01, 0x2D, 0x00, 0x00, 0x00, 0x01, 0x0F, 0x80, 0x00, 0x00, 0x1F, 0xFF, 0x82, 0x41, 0x8A, 0xA0, 0xE4, 0x1D, 0x13, 0x9D, 0x09, 0xB8, 0xF0, 0x1E, 0x07, 0x87, 0x84, 0x40, 0x85, 0xAE, 0xC1, 0xCD, 0x48, 0xFF, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x58, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x40, 0x92, 0xB6, 0xB9, 0xAC, 0x1C, 0x85, 0x58, 0xD5];
 
         let bc = buf.clone();
 
-        let headers : HeadersFrame = GenericFrame::from(buf).into();
+        let headers : HeadersFrame = GenericFrame::point_to(&mut buf).into();
 
         assert_eq!(Some(15), headers.get_pad_length());
 

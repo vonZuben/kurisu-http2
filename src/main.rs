@@ -5,6 +5,7 @@ mod debug;
 
 #[macro_use]
 mod buf;
+use buf::Buf;
 
 mod hpack;
 
@@ -24,7 +25,8 @@ use std::fmt::Debug;
 
 mod frame;
 use frame::Frame;
-use frame::headers::HeaderFrame;
+use frame::frame_types::GenericFrame;
+use frame::old_header::HeaderFrame;
 use hpack::huffman::Huffman;
 
 mod bititor;
@@ -152,22 +154,25 @@ fn handle_client<T: Read + Write + Debug>(mut stream: T) {
                 println!("{:?}", stream);
                 if n == 0 { break; }
                 print_hex(&buf[..n]);
-                let f = Frame::new(&buf[..n]);
-                println!("{:?}", f);
+                //let frame : GenericFrame = buf[..n].into();
+                let frame = GenericFrame::point_to(&mut buf[..n]);
+                println!("{:?}", frame);
+                //let f = Frame::new(&buf[..n]);
+                //println!("{:?}", f);
 
-                if f.f_type == 1 {
-                    let b = [0u8, 0, 0, 4, 1, 0, 0, 0, 0];
-                    stream.write(&b).unwrap();
+                //if f.f_type == 1 {
+                //    let b = [0u8, 0, 0, 4, 1, 0, 0, 0, 0];
+                //    stream.write(&b).unwrap();
 
-                    let header = HeaderFrame::new(&f);
+                //    let header = HeaderFrame::new(&f);
 
-                    println!("{:?}", header);
+                //    println!("{:?}", header);
 
-                    let huffman = Huffman::new();
-                    let decoded = huffman.decode(header.header_frag);
+                //    let huffman = Huffman::new();
+                //    let decoded = huffman.decode(header.header_frag);
 
-                    println!("{}", str::from_utf8(&decoded).unwrap() );
-                }
+                //    println!("{}", str::from_utf8(&decoded).unwrap() );
+                //}
             },
             Err(e) => {println!("err: {}", e); break;},
         }
