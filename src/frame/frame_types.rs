@@ -1,3 +1,7 @@
+//! All Frame Types detailed in the standard HTTP2 specification.
+//! These all extend Http2Frame in order to map out the respective
+//! frame types.
+
 use std::mem;
 use std::fmt;
 use buf::Buf;
@@ -98,6 +102,7 @@ const PRIORITY : u8 = 0x20;
 /// Padding:
 /// Padding octets.
 
+// helper function to get 32bit numbers from the big endian input stream
 unsafe fn getu32_from_be(buf: &[u8]) -> u32 {
     use std::ptr;
     debug_assert_eq!(buf.len(), 4);
@@ -106,6 +111,7 @@ unsafe fn getu32_from_be(buf: &[u8]) -> u32 {
     u32::from_be(num)
 }
 
+// helper for HeadersFrame to determine the state of PADDED and PRIORITY flags
 enum PadPrioState {
     PaddedOnly,
     PriorityOnly,
@@ -113,6 +119,7 @@ enum PadPrioState {
     Neither,
 }
 
+/// A Map for buffers that contains frames of type HEADERS
 pub struct HeadersFrame<'buf> {
     buf: &'buf mut [u8],
 }
@@ -121,6 +128,9 @@ impl<'obj, 'buf> HeadersFrame<'buf> where HeadersFrame<'buf>: Http2Frame<'obj, '
 
     // private utility functions
     // =============================
+
+    // determine the specific combination of PADDED and PRIORITY flags present
+    // to determine the memory layout
     fn pad_prio_flags(&'obj self) -> PadPrioState {
         use self::PadPrioState::*;
         const PAD_PRIO : u8 = PADDED | PRIORITY;
@@ -136,6 +146,9 @@ impl<'obj, 'buf> HeadersFrame<'buf> where HeadersFrame<'buf>: Http2Frame<'obj, '
 
     // immutable functions
     // =============================
+    // Each of these functions first determines the memory layout then
+    // and then pulls the correct info
+
     pub fn get_pad_length(&'obj self) -> Option<u8> {
         use self::PadPrioState::*;
         match self.pad_prio_flags() {
@@ -143,6 +156,7 @@ impl<'obj, 'buf> HeadersFrame<'buf> where HeadersFrame<'buf>: Http2Frame<'obj, '
             _                 => None,
         }
     }
+
     pub fn get_priority_info(&'obj self) -> Option<(bool, u32, u8)> {
         use self::PadPrioState::*;
         let buf = match self.pad_prio_flags() {
@@ -155,6 +169,7 @@ impl<'obj, 'buf> HeadersFrame<'buf> where HeadersFrame<'buf>: Http2Frame<'obj, '
         let weight = buf[4];
         Some((exclusive, stream_dep & 0x7FFFFFFF, weight))
     }
+
     pub fn get_header_block_fragment(&'obj self) -> &[u8] {
         use self::PadPrioState::*;
         match self.pad_prio_flags() {
@@ -175,6 +190,7 @@ mod frame_type_tests {
 
     #[test]
     fn read_headers_test() { // TEST different PADDED/PRIORITY flag combinations
+        //================================
         // Neither
         //================================
         let mut buf = vec![0x00, 0x00, 0xEE, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x82, 0x41, 0x8A, 0xA0, 0xE4, 0x1D, 0x13, 0x9D, 0x09, 0xB8, 0xF0, 0x1E, 0x07, 0x87, 0x84, 0x40, 0x85, 0xAE, 0xC1, 0xCD, 0x48, 0xFF, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x58, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x40, 0x92, 0xB6, 0xB9, 0xAC, 0x1C, 0x85, 0x58, 0xD5];
@@ -190,6 +206,7 @@ mod frame_type_tests {
 
         assert_eq!(headers.get_header_block_fragment()[..], bc[9..]);
 
+        //================================
         // PaddedOnly
         //================================
         let mut buf = vec![0x00, 0x00, 0xEE, 0x01, 0x08, 0x00, 0x00, 0x00, 0x01, 0x0F, 0x82, 0x41, 0x8A, 0xA0, 0xE4, 0x1D, 0x13, 0x9D, 0x09, 0xB8, 0xF0, 0x1E, 0x07, 0x87, 0x84, 0x40, 0x85, 0xAE, 0xC1, 0xCD, 0x48, 0xFF, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x58, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x40, 0x92, 0xB6, 0xB9, 0xAC, 0x1C, 0x85, 0x58, 0xD5];
@@ -205,6 +222,7 @@ mod frame_type_tests {
 
         assert_eq!(headers.get_header_block_fragment()[..], bc[10..]);
 
+        //================================
         // PriorityOnly
         //================================
         let mut buf = vec![0x00, 0x00, 0xEE, 0x01, 0x20, 0x00, 0x00, 0x00, 0x01, 0x80, 0x00, 0x00, 0x1F, 0xFF, 0x82, 0x41, 0x8A, 0xA0, 0xE4, 0x1D, 0x13, 0x9D, 0x09, 0xB8, 0xF0, 0x1E, 0x07, 0x87, 0x84, 0x40, 0x85, 0xAE, 0xC1, 0xCD, 0x48, 0xFF, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x58, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x40, 0x92, 0xB6, 0xB9, 0xAC, 0x1C, 0x85, 0x58, 0xD5];
@@ -222,6 +240,7 @@ mod frame_type_tests {
 
         assert_eq!(headers.get_header_block_fragment()[..], bc[14..]);
 
+        //================================
         // Both
         //================================
         let mut buf = vec![0x00, 0x00, 0xEE, 0x01, 0x2D, 0x00, 0x00, 0x00, 0x01, 0x0F, 0x80, 0x00, 0x00, 0x1F, 0xFF, 0x82, 0x41, 0x8A, 0xA0, 0xE4, 0x1D, 0x13, 0x9D, 0x09, 0xB8, 0xF0, 0x1E, 0x07, 0x87, 0x84, 0x40, 0x85, 0xAE, 0xC1, 0xCD, 0x48, 0xFF, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x58, 0x86, 0xA8, 0xEB, 0x10, 0x64, 0x9C, 0xBF, 0x40, 0x92, 0xB6, 0xB9, 0xAC, 0x1C, 0x85, 0x58, 0xD5];
