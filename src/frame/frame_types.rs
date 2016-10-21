@@ -140,7 +140,7 @@ impl<'obj, 'buf> HeadersFrame<'buf> where HeadersFrame<'buf>: Http2Frame<'obj, '
             PADDED   => PaddedOnly,
             PRIORITY => PriorityOnly,
             PAD_PRIO => Both,
-            _        => panic!("impossible pad_prio_state"),
+            _        => unreachable!(),
         }
     }
 
