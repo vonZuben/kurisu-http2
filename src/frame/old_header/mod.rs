@@ -3,10 +3,6 @@ use std::borrow::Cow;
 
 use frame::Frame;
 
-pub mod huffman;
-
-mod integers;
-
 /// ===============================
 /// HEADER FLAGS
 /// ===============================
@@ -65,7 +61,7 @@ const PRIORITY : u8 = 0x20;
 /// Padding octets.
 
 #[derive(Debug)]
-pub struct Header<'a>{
+pub struct HeaderFrame<'a>{
     pub pad_l: Option<u8>,
     pub exclusive: Option<bool>,
     pub stream_dep: Option<u32>,
@@ -73,7 +69,7 @@ pub struct Header<'a>{
     pub header_frag: &'a[u8],
 }
 
-impl<'a> Header<'a> {
+impl<'a> HeaderFrame<'a> {
     pub fn new(frame: &Frame<'a>) -> Self {
         let buf = frame.payload;
 
@@ -82,28 +78,28 @@ impl<'a> Header<'a> {
 
         // check what flags are set in order to determine which fields are present in the header
         match flags {
-            PAD_PRIO => Header { // All fields are present
+            PAD_PRIO => HeaderFrame { // All fields are present
                 pad_l: Some(buf[0]),
                 exclusive: Some(buf[1] & 0x80 != 0x00),
                 stream_dep: Some(u32::from_le( unsafe { mem::transmute([ buf[4], buf[3], buf[2], buf[1] & 0x7F ]) } )),
                 weight: Some(buf[5]),
                 header_frag: &buf[6..],
             },
-            PADDED => Header { // Only the Padding field is present
+            PADDED => HeaderFrame { // Only the Padding field is present
                 pad_l: Some(buf[0]),
                 exclusive: None,
                 stream_dep: None,
                 weight: None,
                 header_frag: &buf[1..],
             },
-            PRIORITY => Header { // Only the Priority fields are present
+            PRIORITY => HeaderFrame { // Only the Priority fields are present
                 pad_l: None,
                 exclusive: Some(buf[0] & 0x80 != 0x00),
                 stream_dep: Some(u32::from_le( unsafe { mem::transmute([ buf[3], buf[2], buf[3], buf[0] & 0x7F ]) } )),
                 weight: Some(buf[4]),
                 header_frag: &buf[5..],
             },
-            _ => Header { // neither the Padding or Priority fields are present
+            _ => HeaderFrame { // neither the Padding or Priority fields are present
                 pad_l: None,
                 exclusive: None,
                 stream_dep: None,
@@ -114,7 +110,7 @@ impl<'a> Header<'a> {
     }
 }
 
-fn process_header<'a>(header: &'a Header) {
+fn process_header<'a>(header: &'a HeaderFrame) {
 
 }
 
@@ -340,7 +336,7 @@ static STATIC_TABLE: &'static [HeaderEntry<'static>] = &[
 #[cfg(test)]
 mod header_tests {
     use frame::Frame;
-    use frame::headers::Header;
+    use super::HeaderFrame;
 
     #[test]
     fn new_header_unpadded() {
@@ -348,7 +344,7 @@ mod header_tests {
 
         let frame = Frame::new(&tst_frame);
 
-        let header = Header::new(&frame);
+        let header = HeaderFrame::new(&frame);
 
         assert_eq!(header.pad_l, None);
         assert_eq!(header.exclusive, Some(true));
