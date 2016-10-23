@@ -33,6 +33,8 @@ mod bititor;
 
 mod request;
 
+mod header;
+
 //#[path = "ssl.rs"]
 //mod ssl;
 
