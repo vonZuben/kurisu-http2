@@ -6,8 +6,7 @@
 //! is used
 
 use std::borrow::{Cow, Borrow};
-use std::collections::HashMap;
-use std::collections::hash_map::Values;
+use std::slice::Iter;
 
 /// Header list entry with owed or borrowed string
 #[derive(Debug)]
@@ -39,41 +38,33 @@ impl<'a> HeaderEntry<'a> {
 /// Header list to abstract the underlying memory management.
 /// Once something is added to the HeaderList,
 /// IN CAN NOT be modified
-pub struct HeaderList<'a> (HashMap<&'a str, HeaderEntry<'a>>);
+pub struct HeaderList<'a> (Vec<HeaderEntry<'a>>);
 
 impl<'a> HeaderList<'a> {
     pub fn with_capacity(cap: usize) -> Self {
-        HeaderList ( HashMap::with_capacity(cap) )
+        HeaderList ( Vec::with_capacity(cap) )
     }
 
-    // the unsafe in this function is done to save space
-    // since the HeaderEntry representation is
-    // still useful and there is no reason to create
-    // another owned key.
-    //
-    // This is safe as long as the 'entry' in the HashMap is
-    // never exposed mutably
     pub fn add_entry(&mut self, entry: HeaderEntry<'a>) {
-        let ptr = entry.name.borrow() as *const str;
-        unsafe {
-            self.0.insert(&*ptr, entry);
-        }
+        self.0.push(entry);
     }
 
     // this function is useful for reading the headers that you expect
     // from a request
-    pub fn get_value_by_name(&self, name: &str) -> Option<&str> {
-        match self.0.get(name) {
-            Some(entry) => Some(entry.value.borrow()),
-            None        => None,
+    pub fn get_value_by_name(&self, _name: &str) -> Option<&str> {
+        for entry in &self.0 {
+            if entry.name == _name {
+                return Some(entry.value.borrow());
+            }
         }
+        None
     }
 
     // this function is useful when turning the HeaderList over into
     // an hpack representation for the response
     // NO ORDER guaranties
-    pub fn iter(&self) -> Values<&'a str, HeaderEntry<'a>> {
-        self.0.values()
+    pub fn iter(&self) -> Iter<HeaderEntry<'a>> {
+        self.0.iter()
     }
 }
 
