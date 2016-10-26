@@ -253,7 +253,7 @@ fn main() {
                     println!("NOT TLS");
                     //let mut b: [u8;512] = unsafe { mem::uninitialized() };
                     //let n = stream.read(&mut b).unwrap();
-                    stream.write_all(b"HTTP/1.1 301 Moved Permanently\r\nLocation: https://localhost:8080\r\n\r\n").unwrap();
+                    stream.write_all(b"HTTP/1.1 307 Temporary Redirect\r\nLocation: https://localhost:8080\r\n\r\n").unwrap();
                     //println!("size: {}: {}", n, str::from_utf8(&b[..n]).unwrap());
                     stream.shutdown(std::net::Shutdown::Both).unwrap();
                 });
