@@ -26,6 +26,14 @@ impl<'a, T1, T2> From<(T1, T2)> for HeaderEntry<'a>
     }
 }
 
+// this is mostly for easy debug
+impl<'a> PartialEq for HeaderEntry<'a> {
+    fn eq(&self, other: &HeaderEntry<'a>) -> bool {
+        self.name == other.name && self.value == other.value
+    }
+}
+impl<'a> Eq for HeaderEntry<'a> {}
+
 impl<'a> HeaderEntry<'a> {
     pub fn name(&self) -> &str {
         self.name.borrow()
