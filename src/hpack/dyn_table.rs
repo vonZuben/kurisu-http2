@@ -24,11 +24,11 @@ impl DynTable {
     //
     // the max_size is the hpack spec size calculated as the sum of octets in
     // the name and value of each entry plus 32
-    pub fn with_capacity(size: usize) -> Self {
+    pub fn with_max_size(max_size: usize, num_entries: usize) -> Self {
         DynTable {
-            table: VecDeque::with_capacity(size),
+            table: VecDeque::with_capacity(num_entries),
             current_size: 0,
-            max_size: DEFAULT_SIZE,
+            max_size: max_size,
         }
     }
 
@@ -105,8 +105,11 @@ impl DynTable {
             self.current_size += entry_size;
             self.table.push_front(entry);
         }
+        // if there is no room even after emptying the
+        // entire table, then the add results in an empty table
     }
 
+    // calculate size according to spec
     fn size_of_entry(entry: &DynTableEntry) -> usize {
         entry.0.len() + entry.1.len() + 32
     }
@@ -119,11 +122,41 @@ mod dyn_table_tests {
 
     #[test]
     fn test_add() {
-        let mut table = DynTable::with_capacity(10);
+        let mut table = DynTable::with_max_size(100, 10);
 
         table.add_entry_literal("name1".to_string(), "value1".to_string());
-        table.add_entry_literal("name2".to_string(), "value2".to_string());
+        table.add_entry_id(0, "value2".to_string());
 
-        assert_eq!(table.get_header_entry(0), ("name2", "value2").into());
+        assert_eq!(table.get_header_entry(0), ("name1", "value2").into());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_evictions() {
+        let mut table = DynTable::with_max_size(37, 10); // test add
+
+        table.add_entry_literal("nm".to_string(), "val".to_string());
+        assert_eq!(table.get_header_entry(0), ("nm", "val").into());
+
+        table.add_entry_id(0, "ttt".to_string()); // will evict the first entry but Rc should still be valid
+        assert_eq!(table.get_header_entry(0), ("nm", "ttt").into());
+
+        table.add_entry_id(0, "XXXX".to_string()); // will evict and not be enough room to add
+        let entry = table.get_header_entry(0); // panic here
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_max_size_set() {
+        let mut table = DynTable::with_max_size(200, 10);
+        table.add_entry_literal("n".to_string(), "v".to_string());
+        table.add_entry_id(0, "z".to_string());
+
+        assert_eq!(table.get_header_entry(0), ("n", "z").into());
+        assert_eq!(table.get_header_entry(1), ("n", "v").into());
+
+        table.max_size_update(10); // should evict
+
+        let entry = table.get_header_entry(0); // panic here
     }
 }
