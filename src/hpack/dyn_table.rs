@@ -113,10 +113,10 @@ impl DynTable {
     }
 }
 
+#[allow(unused_variables)]
 #[cfg(test)]
 mod dyn_table_tests {
     use super::DynTable;
-    use header::HeaderEntry;
 
     #[test]
     fn test_add() {
@@ -154,7 +154,6 @@ mod dyn_table_tests {
         assert_eq!(table.get_header_entry(1), ("n", "v").into());
 
         table.max_size_update(10); // should evict
-
         let entry = table.get_header_entry(0); // panic here
     }
 }

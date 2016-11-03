@@ -79,7 +79,7 @@ impl<'a> HeaderList<'a> {
 #[cfg(test)]
 mod header_list_tests {
 
-    use super::{HeaderList, HeaderEntry};
+    use super::HeaderList;
 
     #[test]
     fn test_list() {

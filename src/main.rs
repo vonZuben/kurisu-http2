@@ -14,7 +14,6 @@ use openssl::ssl::*;
 use std::net::{TcpListener};
 use std::thread;
 use std::io::{Read, Write};
-//use std::fs::File;
 use std::str;
 //use std::slice;
 //use std::sync::{Once, ONCE_INIT};
@@ -24,9 +23,7 @@ use std::fmt::Debug;
 //use std::mem;
 
 mod frame;
-use frame::Frame;
 use frame::frame_types::GenericFrame;
-use frame::old_header::HeaderFrame;
 use hpack::huffman::Huffman;
 
 mod bititor;
