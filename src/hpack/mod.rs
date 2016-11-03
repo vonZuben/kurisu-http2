@@ -1,10 +1,21 @@
 //! Every connection manages an instance of the hpack encoder/decoder
 //! This is so that a dynamic table can be properly managed per connection
-use std::borrow::Cow;
 
 pub mod huffman;
 pub mod integers;
+pub mod dyn_table;
 
+static DEFAULT_SIZE: usize = 4096;
+
+/// function that takes the hpack block part of the header
+/// and creates a header list from it.
+///
+/// This must take a complete block and not just a fragment
+/// ie. Until the END_HEADERS flag is passed
+///
+/// Needs the dynamic table to be managed by the connection
+/// because it is a stateful list used for the entire connection
+//pub fn get_header_list(hpack_block: &[u8])
 
 /// ===============================
 /// HEADER FRAGMENT FORMATS

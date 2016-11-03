@@ -3,8 +3,6 @@ use std::rc::Rc;
 
 use header::HeaderEntry;
 
-static DEFAULT_SIZE: usize = 4096;
-
 // Rc is used to wrap the strings because
 // different entries can refer to each other
 struct DynTableEntry (Rc<String>, String);
@@ -24,7 +22,7 @@ impl DynTable {
     //
     // the max_size is the hpack spec size calculated as the sum of octets in
     // the name and value of each entry plus 32
-    pub fn with_max_size(max_size: usize, num_entries: usize) -> Self {
+    pub fn new(max_size: usize, num_entries: usize) -> Self {
         DynTable {
             table: VecDeque::with_capacity(num_entries),
             current_size: 0,
@@ -122,7 +120,7 @@ mod dyn_table_tests {
 
     #[test]
     fn test_add() {
-        let mut table = DynTable::with_max_size(100, 10);
+        let mut table = DynTable::new(100, 10);
 
         table.add_entry_literal("name1".to_string(), "value1".to_string());
         table.add_entry_id(0, "value2".to_string());
@@ -133,7 +131,7 @@ mod dyn_table_tests {
     #[test]
     #[should_panic]
     fn test_evictions() {
-        let mut table = DynTable::with_max_size(37, 10); // test add
+        let mut table = DynTable::new(37, 10); // test add
 
         table.add_entry_literal("nm".to_string(), "val".to_string());
         assert_eq!(table.get_header_entry(0), ("nm", "val").into());
@@ -148,7 +146,7 @@ mod dyn_table_tests {
     #[test]
     #[should_panic]
     fn test_max_size_set() {
-        let mut table = DynTable::with_max_size(200, 10);
+        let mut table = DynTable::new(200, 10);
         table.add_entry_literal("n".to_string(), "v".to_string());
         table.add_entry_id(0, "z".to_string());
 
