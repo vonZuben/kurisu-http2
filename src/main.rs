@@ -24,7 +24,6 @@ use std::fmt::Debug;
 
 mod frame;
 use frame::frame_types::GenericFrame;
-use hpack::huffman::Huffman;
 
 mod bititor;
 
@@ -213,8 +212,8 @@ fn main() {
     ctx.set_alpn_protocols(&[b"h2"]);
 
     // temp huffman usage just cause
-    let mut huf = Huffman::new();
-    let _ = huf.decode(b"123123");
+    //let mut huf = Huffman::new();
+    //let _ = huf.decode(b"123123");
     //let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
     //println!("listening started, ready to accept");
     //for stream in listener.incoming() {
