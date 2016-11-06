@@ -1,7 +1,12 @@
 use super::dyn_table::DynTable;
+use super::integers;
+use super::static_table::STATIC_TABLE;
+
 use header::{HeaderList, HeaderEntry};
 
-static DEFAULT_SIZE: usize = 4096;
+// private type for representing the result of decoding an entry
+// ( number of bytes used, HeaderEntry )
+type DecEntry<'a> = Result<(HeaderEntry<'a>, usize), &'static str>;
 
 pub struct Decoder {
     dyn_table: DynTable,
@@ -11,8 +16,8 @@ impl Decoder {
 
     // create a new DynTable with the default capacity
     // the number of entries is just an assumption
-    fn new() -> Self {
-        Decoder { dyn_table: DynTable::new(DEFAULT_SIZE, 20) }
+    pub fn new(max_size: usize, num_entries: usize) -> Self {
+        Decoder { dyn_table: DynTable::new(max_size, num_entries) }
     }
 
     /// function that takes the hpack block part of the header
@@ -23,8 +28,56 @@ impl Decoder {
     ///
     /// Needs the dynamic table to be managed by the connection
     /// because it is a stateful list used for the entire connection
-    pub fn get_header_list<'a>(&'a self, hpack_block: &[u8]) -> HeaderList<'a> {
-        unimplemented!();
+    pub fn get_header_list<'a>(&'a self, hpack_block: &[u8]) -> Result<HeaderList<'a>, &'static str> {
+        let hpack_block_len = hpack_block.len();
+        let mut stride = 0;
+
+        // just assuming 10 entries is enough for now
+        let mut header_list = HeaderList::with_capacity(10);
+
+        // loop though all the entries and determine the header representation
+        // type in order to decode it properly
+        //
+        // hpack_block points to the first encoded entry, after each entry is decoded
+        // must find out how much of the buffer has been consumed
+        while stride < hpack_block_len {
+            if      hpack_block[stride] & 0x80 == 0x80 { // Indexed Field Representation
+                let entry = try!(self.indexed_header(&hpack_block[stride..]));
+                header_list.add_entry(entry.0);
+                stride += entry.1; // move over the consumed bytes
+            }
+            else if hpack_block[stride] & 0x40 == 0x40 { // Literal Field Representation
+                panic!();
+            }
+            else if hpack_block[stride] & 0xF0 == 0x00 { // Without Indexing
+                panic!();
+            }
+            else if hpack_block[stride] & 0xF0 == 0xF0 { // Never Indexed
+                panic!();
+            }
+            else if hpack_block[stride] & 0x20 == 0x20 { // Max Size Update
+                panic!();
+            }
+        }
+
+        Ok(header_list)
+    }
+
+    // use the index to get the entry from the correct
+    // table : static/dynamic
+    // the index given starts at 1 (not 0)
+    fn use_index<'a>(&'a self, index: usize) -> Result<HeaderEntry<'a>, &'static str> {
+        // get the length of the dynamic table
+        // to make sure indexing is in range
+        let ne = self.dyn_table.num_entries() + 61;
+        // pull result from static or dynamic table
+        // or return error
+        match index {
+            0             => Err("hpack: index of 0 was found"),
+            i @  1 ... 62 => Ok(STATIC_TABLE[i - 1].into()),
+            i if i < ne   => Ok(self.dyn_table.get_header_entry(i - 62)),
+            _             => Err("hpack: index is out of range"),
+        }
     }
 
     /// ===============================
@@ -48,8 +101,10 @@ impl Decoder {
     /// The index value of 0 is not used. It MUST be treated as a decoding error if found in an indexed header field representation.
     ///
 
-    fn indexed_header<'a>(&'a self, buf: &[u8]) -> HeaderEntry<'a> {
-        unimplemented!();
+    fn indexed_header<'a>(&'a self, buf: &[u8]) -> DecEntry<'a> {
+        let (index, consumed) = try!(integers::decode_integer(&buf, 7));
+        let entry = try!(self.use_index(index as usize));
+        Ok((entry, consumed as usize))
     }
 
     /// 6.2 Literal Header Field Representation
@@ -103,7 +158,7 @@ impl Decoder {
     /// represented as a string literal (see Section 5.2).
     ///
 
-    fn literal_header<'a>(&'a self, buf: &[u8]) -> HeaderEntry<'a> {
+    fn literal_header<'a>(&'a self, buf: &[u8]) -> DecEntry<'a> {
         unimplemented!();
     }
 
@@ -150,7 +205,7 @@ impl Decoder {
     /// Either form of header field name representation is followed by the header field value
     /// represented as a string literal (see Section 5.2).
 
-    fn literal_header_unindexed<'a>(&'a self, buf: &[u8]) -> HeaderEntry<'a> {
+    fn literal_header_unindexed<'a>(&'a self, buf: &[u8]) -> DecEntry<'a> {
         unimplemented!();
     }
 
@@ -197,7 +252,7 @@ impl Decoder {
     ///
     /// The encoding of the representation is identical to the literal header field without indexing (see Section 6.2.2).
 
-    fn literal_header_never_indexed<'a>(&'a self, buf: &[u8]) -> HeaderEntry<'a> {
+    fn literal_header_never_indexed<'a>(&'a self, buf: &[u8]) -> DecEntry<'a> {
         unimplemented!();
     }
 
@@ -229,8 +284,20 @@ impl Decoder {
 #[cfg(test)]
 mod decoder_tests {
 
+    use super::Decoder;
+    //use header::HeaderList;
+
     #[test]
     fn tmp_decoder_test() {
-        assert!(true);
+        let decoder = Decoder::new(100, 10);
+
+        let list = decoder.get_header_list(&[0x82, 0x84]).unwrap();
+
+        for e in list.iter() {
+            println!("{:?}", e);
+        }
+
+        assert_eq!(list.get_value_by_name(":method"), Some("GET"));
+        assert_eq!(list.get_value_by_name(":path"), Some("/"));
     }
 }
