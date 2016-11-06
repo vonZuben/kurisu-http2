@@ -68,9 +68,15 @@ impl DynTable {
         self.evict(0);
     }
 
+    pub fn num_entries(&self) -> usize {
+        self.table.len()
+    }
+
     //=========================================
     // private utility fn
     //=========================================
+    // error handling should be done out side this module
+    // use num_entries to make sure you are indexing in range
     fn get_entry(&self, index: usize) -> &DynTableEntry {
         debug_assert!(index < self.table.len(), "index is out of range for dyn_table");
         &self.table[index]
@@ -125,6 +131,7 @@ mod dyn_table_tests {
         table.add_entry_literal("name1".to_string(), "value1".to_string());
         table.add_entry_id(0, "value2".to_string());
 
+        assert_eq!(table.num_entries(), 2);
         assert_eq!(table.get_header_entry(0), ("name1", "value2").into());
     }
 
@@ -137,9 +144,11 @@ mod dyn_table_tests {
         assert_eq!(table.get_header_entry(0), ("nm", "val").into());
 
         table.add_entry_id(0, "ttt".to_string()); // will evict the first entry but Rc should still be valid
+        assert_eq!(table.num_entries(), 1);
         assert_eq!(table.get_header_entry(0), ("nm", "ttt").into());
 
         table.add_entry_id(0, "XXXX".to_string()); // will evict and not be enough room to add
+        assert_eq!(table.num_entries(), 0);
         let entry = table.get_header_entry(0); // panic here
     }
 
@@ -154,6 +163,7 @@ mod dyn_table_tests {
         assert_eq!(table.get_header_entry(1), ("n", "v").into());
 
         table.max_size_update(10); // should evict
+        assert_eq!(table.num_entries(), 0);
         let entry = table.get_header_entry(0); // panic here
     }
 }
