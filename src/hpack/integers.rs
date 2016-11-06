@@ -1,6 +1,3 @@
-
-use bititor;
-
 /// 5.1 Integer Representation
 /// Integers are used to represent name indexes, header field indexes, or string lengths. An integer representation can start anywhere within an octet. To allow for optimized processing, an integer representation always finishes at the end of an octet.
 ///
@@ -32,33 +29,15 @@ use bititor;
 ///
 /// The prefix size, N, is always between 1 and 8 bits. An integer starting at an octet boundary will have an 8-bit prefix.
 ///
-#[derive(Debug)]
-enum HPACK_INTEGER_ERROR {
-    InvalidPrefix,
-    NotEnoughOctets,
-    TooManyOctets,
-}
 
-// decode I from the next N bits
-// if I < 2^N - 1, return I
-// else
-//     M = 0
-//     repeat
-//         B = next octet
-//         I = I + (B & 127) * 2^M
-//         M = M + 7
-//     while B & 128 == 128
-//     return I
-
-fn decode_integer(buf: &[u8], prefix_size: u8) -> Result<u32, HPACK_INTEGER_ERROR> {
-    use self::HPACK_INTEGER_ERROR::*;
+pub fn decode_integer(buf: &[u8], prefix_size: u8) -> Result<(u32, u8), &'static str> {
     use std::num::Wrapping;
 
     if prefix_size < 1 || prefix_size > 8 {
-        return Err(InvalidPrefix);
+        return Err("hpack integer: invalid prefix");
     }
     if buf.len() < 1 {
-        return Err(NotEnoughOctets);
+        return Err("hpack integer: not enough octets (0)");
     }
 
     // Make sure there's no overflow in the shift operation
@@ -70,7 +49,7 @@ fn decode_integer(buf: &[u8], prefix_size: u8) -> Result<u32, HPACK_INTEGER_ERRO
     let mut value = (buf[0] & mask) as u32;
     if value < (mask as u32) {
         // Value fits in the prefix bits.
-        return Ok(value);
+        return Ok((value, 1));
     }
 
     // The value does not fit into the prefix bits, so we read as many following
@@ -90,19 +69,19 @@ fn decode_integer(buf: &[u8], prefix_size: u8) -> Result<u32, HPACK_INTEGER_ERRO
 
         if b & 128 != 128 {
             // Most significant bit is not set => no more continuation bytes
-            return Ok(value);
+            return Ok((value, total));
         }
 
         if total == octet_limit {
             // The spec tells us that we MUST treat situations where the
             // encoded representation is too long (in octets) as an error.
-            return Err(TooManyOctets);
+            return Err("hpack integer: to many octets");
         }
     }
 
     // If we have reached here, it means the buffer has been exhausted without
     // hitting the termination condition.
-    Err(NotEnoughOctets)
+    Err("hpack integer: not enough octets")
 }
 
 #[cfg(test)]
@@ -114,16 +93,28 @@ mod tests {
         // simple tst
         let tst_num = vec![0x41];
         let num = decode_integer(&tst_num, 8).unwrap();
-        assert_eq!(num, 65);
+        assert_eq!(num, (65, 1));
 
         // complex number
         let tst_num = vec![0xFF, 0x05];
         let num = decode_integer(&tst_num, 8).unwrap();
-        assert_eq!(num, 260);
+        assert_eq!(num, (260, 2));
 
         // more complex number
         let tst_num = vec![0xFF, 0x9A, 0x0A];
         let num = decode_integer(&tst_num, 5).unwrap();
-        assert_eq!(num, 1337);
+        assert_eq!(num, (1337, 3));
     }
 }
+
+// decode I from the next N bits
+// if I < 2^N - 1, return I
+// else
+//     M = 0
+//     repeat
+//         B = next octet
+//         I = I + (B & 127) * 2^M
+//         M = M + 7
+//     while B & 128 == 128
+//     return I
+
