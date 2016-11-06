@@ -106,7 +106,7 @@ const PRIORITY : u8 = 0x20;
 unsafe fn getu32_from_be(buf: &[u8]) -> u32 {
     use std::ptr;
     debug_assert_eq!(buf.len(), 4);
-    let mut num : u32 = 0;
+    let mut num : u32 = mem::uninitialized();
     ptr::copy(buf.as_ptr(), &mut num as *mut u32 as *mut u8, 4);
     u32::from_be(num)
 }
