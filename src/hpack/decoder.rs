@@ -1,5 +1,6 @@
 use super::dyn_table::DynTable;
 use super::integers;
+use super::huffman::Huffman;
 use super::static_table::STATIC_TABLE;
 
 use header::{HeaderList, HeaderEntry};
@@ -10,6 +11,7 @@ type DecEntry<'a> = Result<(HeaderEntry<'a>, usize), &'static str>;
 
 pub struct Decoder {
     dyn_table: DynTable,
+    huffman: Huffman, // this might be temporary, since you should not need to initialize this each time
 }
 
 impl Decoder {
@@ -17,7 +19,8 @@ impl Decoder {
     // create a new DynTable with the default capacity
     // the number of entries is just an assumption
     pub fn new(max_size: usize, num_entries: usize) -> Self {
-        Decoder { dyn_table: DynTable::new(max_size, num_entries) }
+        Decoder { dyn_table: DynTable::new(max_size, num_entries) ,
+            huffman: Huffman::new() }
     }
 
     /// function that takes the hpack block part of the header
@@ -28,7 +31,7 @@ impl Decoder {
     ///
     /// Needs the dynamic table to be managed by the connection
     /// because it is a stateful list used for the entire connection
-    pub fn get_header_list<'a>(&'a self, hpack_block: &[u8]) -> Result<HeaderList<'a>, &'static str> {
+    pub fn get_header_list<'a>(&'a mut self, hpack_block: &[u8]) -> Result<HeaderList<'a>, &'static str> {
         let hpack_block_len = hpack_block.len();
         let mut stride = 0;
 
@@ -41,23 +44,29 @@ impl Decoder {
         // hpack_block points to the first encoded entry, after each entry is decoded
         // must find out how much of the buffer has been consumed
         while stride < hpack_block_len {
+            let entry: (HeaderEntry<'a>, usize); // DecEntry Ok Result
             if      hpack_block[stride] & 0x80 == 0x80 { // Indexed Field Representation
-                let entry = try!(self.indexed_header(&hpack_block[stride..]));
-                header_list.add_entry(entry.0);
-                stride += entry.1; // move over the consumed bytes
+                entry = try!(self.indexed_header(&hpack_block[stride..]));
             }
-            else if hpack_block[stride] & 0x40 == 0x40 { // Literal Field Representation
-                panic!();
+            else if hpack_block[stride] & 0xC0 == 0x40 { // Literal Field Representation
+                entry = try!(self.literal_header(&hpack_block[stride..]));
             }
             else if hpack_block[stride] & 0xF0 == 0x00 { // Without Indexing
-                panic!();
+                entry = try!(self.literal_header_unindexed(&hpack_block[stride..]));
             }
-            else if hpack_block[stride] & 0xF0 == 0xF0 { // Never Indexed
-                panic!();
+            else if hpack_block[stride] & 0xF0 == 0x10 { // Never Indexed
+                entry = try!(self.literal_header_never_indexed(&hpack_block[stride..]));
             }
-            else if hpack_block[stride] & 0x20 == 0x20 { // Max Size Update
-                panic!();
+            else if hpack_block[stride] & 0xE0 == 0x20 { // Max Size Update
+                let consumed = self.size_update(&hpack_block[stride..]);
+                stride += consumed;
+                continue;
             }
+            else {
+                return Err("Unrecognized block type");
+            }
+            header_list.add_entry(entry.0);
+            stride += entry.1; // move over the consumed bytes
         }
 
         Ok(header_list)
@@ -73,11 +82,24 @@ impl Decoder {
         // pull result from static or dynamic table
         // or return error
         match index {
-            0             => Err("hpack: index of 0 was found"),
-            i @  1 ... 62 => Ok(STATIC_TABLE[i - 1].into()),
-            i if i < ne   => Ok(self.dyn_table.get_header_entry(i - 62)),
-            _             => Err("hpack: index is out of range"),
+            0            => Err("hpack: index of 0 was found"),
+            i @ 1 ... 62 => Ok(STATIC_TABLE[i - 1].into()),
+            i if i < ne  => Ok(self.dyn_table.get_header_entry(i - 62)),
+            _            => Err("hpack: index is out of range"),
         }
+    }
+
+    // be carful using this funciton as it is stateful, call it in the correct order
+    fn consume_literal(&self, total_consumed: &mut usize, buf: &[u8]) -> Result<String, &'static str>{
+        // get value length and huffman status
+        let is_huffman = buf[*total_consumed] & 0x80 == 0x80;
+        let (length, consumed) = try!(integers::decode_integer(&buf[*total_consumed..], 7));
+        *total_consumed += consumed as usize;
+
+        let value = self.huffman.decode(&buf[*total_consumed..length as usize]);
+        *total_consumed += length as usize;
+
+        unsafe { Ok(String::from_utf8_unchecked(value)) }
     }
 
     /// ===============================
@@ -158,8 +180,26 @@ impl Decoder {
     /// represented as a string literal (see Section 5.2).
     ///
 
-    fn literal_header<'a>(&'a self, buf: &[u8]) -> DecEntry<'a> {
-        unimplemented!();
+    fn literal_header<'a>(&'a mut self, buf: &[u8]) -> DecEntry<'a> {
+        let mut total_consumed = 0usize;
+
+        let (index, consumed) = try!(integers::decode_integer(&buf, 6));
+        total_consumed += consumed as usize;
+
+        if index == 0 { // must get name and value from literal
+            let name = try!(self.consume_literal(&mut total_consumed, &buf));
+            let value = try!(self.consume_literal(&mut total_consumed, &buf));
+            self.dyn_table.add_entry_literal(name, value);
+        }
+        else { // have name via index
+            let value = try!(self.consume_literal(&mut total_consumed, &buf));
+            self.dyn_table.add_entry_id(index as usize, value);
+        }
+
+        // the entry to return will always be the latest added
+        // entry in the dynamic table for this case
+        let header_entry: HeaderEntry<'a> = self.dyn_table.get_header_entry(0);
+        Ok((header_entry, total_consumed))
     }
 
     ///
@@ -276,7 +316,7 @@ impl Decoder {
     ///
     /// Reducing the maximum size of the dynamic table can cause entries to be evicted (see Section 4.3).
 
-    fn size_update(&self) {
+    fn size_update(&self, buf: &[u8]) -> usize {
         unimplemented!();
     }
 }
