@@ -8,13 +8,13 @@ type HuffmanTable = [(u32, u8)];
 
 /// Decodes Huffman encoded strings
 /// Optimized specialized for http2 Huffman encoded strings
-pub struct Huffman<'a> {
+pub struct Huffman {
     decode_table: HashMap<(u32, u8), u8>,
-    encode_table: &'a HuffmanTable,
+    encode_table: &'static HuffmanTable,
 }
 
-impl<'a> Huffman<'a> {
-    fn with_table(table: &'a HuffmanTable) -> Self {
+impl Huffman {
+    fn with_table(table: &'static HuffmanTable) -> Self {
         let len = table.len();
 
         let mut hash_map = HashMap::with_capacity(len);
