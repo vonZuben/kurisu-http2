@@ -10,5 +10,8 @@ devtest:
 pretty:
 	cargo rustc -- -Z unstable-options --pretty=expanded
 
+test:
+	RUST_BACKTRACE=1 cargo test
+
 run:
 	cargo test
