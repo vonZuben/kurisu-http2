@@ -3,9 +3,9 @@
 
 mod huffman;
 mod integers;
-mod dyn_table;
-mod static_table;
+mod table;
 
 pub mod decoder;
 
+static DEFAULT_SIZE: usize = 4096;
 

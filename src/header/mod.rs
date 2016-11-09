@@ -5,55 +5,59 @@
 //! Otherwise uses owed string. For that reason Cow
 //! is used
 
-use std::borrow::{Cow, Borrow};
+use std::rc::Rc;
 use std::slice::Iter;
 
 /// Header list entry with owed or borrowed string
 #[derive(Debug)]
-pub struct HeaderEntry<'a> {
-    name: Cow<'a, str>,
-    value: Cow<'a, str>,
+pub struct HeaderEntry {
+    name: Rc<String>,
+    value: Rc<String>,
 }
 
-// turn a tuple into a HeaderEntry from any combination of
-// owned and borrowed string data
+impl HeaderEntry {
+    pub fn new(name: &Rc<String>, value: &Rc<String>) -> Self {
+        HeaderEntry { name: name.clone(), value: value.clone() }
+    }
+}
+// turn a tuple into a HeaderEntry from a &str
+// to make testing easier
 // Formate (name, value)
-impl<'a, T1, T2> From<(T1, T2)> for HeaderEntry<'a>
-    where T1: Into<Cow<'a, str>>, T2: Into<Cow<'a, str>> {
+impl From<(&'static str, &'static str)> for HeaderEntry {
 
-    fn from(obj: (T1, T2)) -> HeaderEntry<'a> {
-        HeaderEntry { name: obj.0.into(), value: obj.1.into() }
+    fn from(obj: (&str, &str)) -> HeaderEntry {
+        HeaderEntry { name: Rc::new(obj.0.to_string()), value: Rc::new(obj.1.to_string()) }
     }
 }
 
 // this is mostly for easy debug
-impl<'a> PartialEq for HeaderEntry<'a> {
-    fn eq(&self, other: &HeaderEntry<'a>) -> bool {
-        self.name == other.name && self.value == other.value
+impl PartialEq for HeaderEntry {
+    fn eq(&self, other: &HeaderEntry) -> bool {
+        *self.name == *other.name && *self.value == *other.value
     }
 }
-impl<'a> Eq for HeaderEntry<'a> {}
+impl Eq for HeaderEntry {}
 
-impl<'a> HeaderEntry<'a> {
+impl HeaderEntry {
     pub fn name(&self) -> &str {
-        self.name.borrow()
+        &self.name
     }
     pub fn value(&self) -> &str {
-        self.value.borrow()
+        &self.value
     }
 }
 
 /// Header list to abstract the underlying memory management.
 /// Once something is added to the HeaderList,
 /// IN CAN NOT be modified
-pub struct HeaderList<'a> (Vec<HeaderEntry<'a>>);
+pub struct HeaderList (Vec<HeaderEntry>);
 
-impl<'a> HeaderList<'a> {
+impl HeaderList {
     pub fn with_capacity(cap: usize) -> Self {
         HeaderList ( Vec::with_capacity(cap) )
     }
 
-    pub fn add_entry(&mut self, entry: HeaderEntry<'a>) {
+    pub fn add_entry(&mut self, entry: HeaderEntry) {
         self.0.push(entry);
     }
 
@@ -61,8 +65,8 @@ impl<'a> HeaderList<'a> {
     // from a request
     pub fn get_value_by_name(&self, _name: &str) -> Option<&str> {
         for entry in &self.0 {
-            if entry.name == _name {
-                return Some(entry.value.borrow());
+            if *entry.name == _name {
+                return Some(&entry.value);
             }
         }
         None
@@ -71,7 +75,7 @@ impl<'a> HeaderList<'a> {
     // this function is useful when turning the HeaderList over into
     // an hpack representation for the response
     // NO ORDER guaranties
-    pub fn iter(&self) -> Iter<HeaderEntry<'a>> {
+    pub fn iter(&self) -> Iter<HeaderEntry> {
         self.0.iter()
     }
 }
@@ -79,27 +83,19 @@ impl<'a> HeaderList<'a> {
 #[cfg(test)]
 mod header_list_tests {
 
-    use super::HeaderList;
-
-    #[test]
-    fn test_list() {
-        let mut list = HeaderList::with_capacity(10);
-
-        // test with owned and borrowed data
-        list.add_entry(("host", "local".to_string()).into());
-
-        assert_eq!(list.get_value_by_name("host").unwrap(), "local");
-        //assert_eq!(list.get_entry_by_name("host").unwrap().value, "local");
-    }
+    use std::rc::Rc;
+    use super::{HeaderList, HeaderEntry};
 
     #[test]
     fn test_list_iter() {
         let mut list = HeaderList::with_capacity(10);
 
         list.add_entry(("host1", "local").into());
-        list.add_entry(("host2", "local".to_string()).into());
-        list.add_entry(("host3".to_string(), "local").into());
-        list.add_entry(("host4".to_string(), "local".to_string()).into());
+        list.add_entry(("host2", "local").into());
+        list.add_entry(("host3", "local").into());
+        list.add_entry(("host4", "local").into());
+
+        assert_eq!(list.get_value_by_name("host3").unwrap(), "local");
 
         for entry in list.iter() {
             println!("{:?}", entry);
