@@ -62,7 +62,7 @@ impl Table {
     // entry would be 62 but you would pass 0 as the index
     pub fn get_header_entry(&self, index: usize) -> Result<HeaderEntry, &'static str> {
         let entry = try!(self.get_entry(index));
-        Ok(HeaderEntry::new(&entry.0, &entry.1))
+        Ok(HeaderEntry::new(entry.0.clone(), entry.1.clone()))
     }
 
     // quicker way to get the latest entry put into the dynamic table
@@ -71,7 +71,14 @@ impl Table {
     pub fn get_dyn_front(&self) -> HeaderEntry {
         assert!(self.num_dyn_entries() > 0);
         let entry = &self.dyn_table[0];
-        HeaderEntry::new(&entry.0, &entry.1)
+        HeaderEntry::new(entry.0.clone(), entry.1.clone())
+    }
+
+    // this is usefull for the functions that construct a header
+    // with out modifing the dyn_table
+    pub fn get_name_rc(&self, index: usize) -> Result<Rc<String>, &'static str> {
+        let entry = try!(self.get_entry(index));
+        Ok(entry.0.clone())
     }
 
     pub fn max_size_update(&mut self, new_max_size: usize) {

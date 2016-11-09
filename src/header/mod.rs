@@ -16,8 +16,8 @@ pub struct HeaderEntry {
 }
 
 impl HeaderEntry {
-    pub fn new(name: &Rc<String>, value: &Rc<String>) -> Self {
-        HeaderEntry { name: name.clone(), value: value.clone() }
+    pub fn new(name: Rc<String>, value: Rc<String>) -> Self {
+        HeaderEntry { name: name, value: value }
     }
 }
 // turn a tuple into a HeaderEntry from a &str
