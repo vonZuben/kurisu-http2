@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use super::table::Table;
 use super::integers;
 use super::huffman::Huffman;
@@ -57,7 +59,7 @@ impl Decoder {
                 entry = try!(self.literal_header_never_indexed(&hpack_block[stride..]));
             }
             else if hpack_block[stride] & 0xE0 == 0x20 { // Max Size Update
-                let consumed = self.size_update(&hpack_block[stride..]);
+                let consumed = try!(self.size_update(&hpack_block[stride..]));
                 stride += consumed;
                 continue;
             }
@@ -238,7 +240,10 @@ impl Decoder {
     /// represented as a string literal (see Section 5.2).
 
     fn literal_header_unindexed(&self, buf: &[u8]) -> DecEntry {
-        unimplemented!();
+        // this function is more useful for intermediaries which
+        // this library does not care about at the moment
+        // so it will be treated the same as never indexed
+        self.literal_header_never_indexed(buf)
     }
 
     ///
@@ -285,7 +290,24 @@ impl Decoder {
     /// The encoding of the representation is identical to the literal header field without indexing (see Section 6.2.2).
 
     fn literal_header_never_indexed(&self, buf: &[u8]) -> DecEntry {
-        unimplemented!();
+        let mut total_consumed = 0usize;
+
+        let (index, consumed) = try!(integers::decode_integer(&buf, 4));
+        total_consumed += consumed as usize;
+
+        let header_entry: HeaderEntry;
+        if index == 0 { // must get name and value from literal
+            let name = try!(self.consume_literal(&mut total_consumed, &buf));
+            let value = try!(self.consume_literal(&mut total_consumed, &buf));
+            header_entry = HeaderEntry::new(Rc::new(name), Rc::new(value));
+        }
+        else { // have name via index
+            let name_rc = try!(self.table.get_name_rc(index as usize));
+            let value = try!(self.consume_literal(&mut total_consumed, &buf));
+            header_entry = HeaderEntry::new(name_rc, Rc::new(value));
+        }
+
+        Ok((header_entry, total_consumed))
     }
 
     ///
@@ -308,8 +330,10 @@ impl Decoder {
     ///
     /// Reducing the maximum size of the dynamic table can cause entries to be evicted (see Section 4.3).
 
-    fn size_update(&self, buf: &[u8]) -> usize {
-        unimplemented!();
+    fn size_update(&mut self, buf: &[u8]) -> Result<usize, &'static str> {
+        let (size, consumed) = try!(integers::decode_integer(&buf, 5));
+        self.table.max_size_update(size as usize);
+        Ok(consumed as usize)
     }
 }
 
@@ -323,7 +347,7 @@ mod decoder_tests {
     fn tmp_decoder_test() {
         let mut decoder = Decoder::new(100, 10);
 
-        let list = decoder.get_header_list(&[0x82, 0x84, 0x48, 0x03, 0x35, 0x30, 0x30]).unwrap();
+        let list = decoder.get_header_list(&[0x82, 0x84, 0x48, 0x03, 0x35, 0x30, 0x30, 0x0F, 0x00, 0x01, 0x31]).unwrap();
 
         for e in list.iter() {
             println!("{:?}", e);
@@ -332,5 +356,6 @@ mod decoder_tests {
         assert_eq!(list.get_value_by_name(":method"), Some("GET"));
         assert_eq!(list.get_value_by_name(":path"), Some("/"));
         assert_eq!(list.get_value_by_name(":status"), Some("500"));
+        assert_eq!(list.get_value_by_name("accept-charset"), Some("1"));
     }
 }

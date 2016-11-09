@@ -8,6 +8,7 @@ mod buf;
 use buf::Buf;
 
 mod hpack;
+use hpack::decoder::Decoder;
 
 use openssl::ssl::*;
 
@@ -23,7 +24,8 @@ use std::fmt::Debug;
 //use std::mem;
 
 mod frame;
-use frame::frame_types::GenericFrame;
+use frame::frame_types::{GenericFrame, HeadersFrame};
+use frame::Http2Frame;
 
 mod bititor;
 
@@ -154,7 +156,23 @@ fn handle_client<T: Read + Write + Debug>(mut stream: T) {
                 print_hex(&buf[..n]);
                 //let frame : GenericFrame = buf[..n].into();
                 let frame = GenericFrame::point_to(&mut buf[..n]);
-                println!("{:?}", frame);
+
+                if frame.get_type() == 0x1 {
+                    println!("{:?}", frame);
+                    let hf: HeadersFrame = frame.into();
+                    let mut dec = Decoder::new(4096, 20);
+                    let res = dec.get_header_list(hf.get_header_block_fragment());
+
+                    match res {
+                        Ok(hl) => {
+                            for i in hl.iter() {
+                                println!("{:?}", i);
+                            }
+                        },
+                        Err(e) => println!("{}", e),
+                    }
+                }
+
                 //let f = Frame::new(&buf[..n]);
                 //println!("{:?}", f);
 
