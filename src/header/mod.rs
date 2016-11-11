@@ -7,43 +7,94 @@
 
 use std::rc::Rc;
 use std::slice::Iter;
+use std::ops::Deref;
+
+// internal type to manage entries from the shared
+// static table and the connection private dynamic table
+#[derive(Debug)]
+pub enum EntryInner {
+    R(&'static str),
+    C(Rc<String>),
+}
+
+impl AsRef<str> for EntryInner {
+    fn as_ref(&self) -> &str {
+        use self::EntryInner::*;
+        match self {
+            &R(ref v) => v,
+            &C(ref v) => v.as_ref(),
+        }
+    }
+}
+
+impl Clone for EntryInner {
+    fn clone(&self) -> EntryInner {
+        use self::EntryInner::*;
+        match self {
+            &R(ref v) => R(v),
+            &C(ref v) => C(v.clone()),
+        }
+    }
+}
+
+impl Deref for EntryInner {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.as_ref()
+    }
+}
+
+impl From<&'static str> for EntryInner {
+    fn from(r: &'static str) -> EntryInner {
+        EntryInner::R(r)
+    }
+}
+
+impl From<Rc<String>> for EntryInner {
+    fn from(c: Rc<String>) -> EntryInner {
+        EntryInner::C(c)
+    }
+}
 
 /// Header list entry with owed or borrowed string
 #[derive(Debug)]
 pub struct HeaderEntry {
-    name: Rc<String>,
-    value: Rc<String>,
+    name: EntryInner,
+    value: EntryInner,
 }
 
 impl HeaderEntry {
-    pub fn new(name: Rc<String>, value: Rc<String>) -> Self {
-        HeaderEntry { name: name, value: value }
+    pub fn new<A, B>(name: A, value: B) -> Self
+        where A: Into<EntryInner>, B: Into<EntryInner> {
+        HeaderEntry { name: name.into(), value: value.into() }
     }
 }
 // turn a tuple into a HeaderEntry from a &str
 // to make testing easier
 // Formate (name, value)
-impl From<(&'static str, &'static str)> for HeaderEntry {
+impl<A, B>  From<(A, B)> for HeaderEntry
+    where A: Into<EntryInner>, B: Into<EntryInner> {
 
-    fn from(obj: (&str, &str)) -> HeaderEntry {
-        HeaderEntry { name: Rc::new(obj.0.to_string()), value: Rc::new(obj.1.to_string()) }
+    fn from(obj: (A, B)) -> HeaderEntry {
+        HeaderEntry { name: obj.0.into(), value: obj.1.into() }
     }
 }
 
 // this is mostly for easy debug
 impl PartialEq for HeaderEntry {
     fn eq(&self, other: &HeaderEntry) -> bool {
-        *self.name == *other.name && *self.value == *other.value
+        self.name() == other.name() && self.value() == other.value()
     }
 }
 impl Eq for HeaderEntry {}
 
 impl HeaderEntry {
     pub fn name(&self) -> &str {
-        &self.name
+        self.name.as_ref()
     }
     pub fn value(&self) -> &str {
-        &self.value
+        self.value.as_ref()
     }
 }
 
@@ -65,8 +116,8 @@ impl HeaderList {
     // from a request
     pub fn get_value_by_name(&self, _name: &str) -> Option<&str> {
         for entry in &self.0 {
-            if *entry.name == _name {
-                return Some(&entry.value);
+            if entry.name() == _name {
+                return Some(entry.value.as_ref());
             }
         }
         None

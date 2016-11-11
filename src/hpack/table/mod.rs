@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::rc::Rc;
 
-use header::HeaderEntry;
+use header::{HeaderEntry, EntryInner};
 
 mod static_table;
 use self::static_table::{StaticTable, TableEntry};
@@ -38,19 +38,19 @@ impl Table {
     //
     // add an entry using a name entry that already exists in the table
     pub fn add_entry_id(&mut self, name_id: usize, value: String) -> Result<(), &'static str> {
-        let name_rc: Rc<String>;
+        let name_rc;
         {
             let entry = try!(self.get_entry(name_id));
             name_rc = entry.0.clone();
         }
-        let new_entry = TableEntry (name_rc, Rc::new(value));
+        let new_entry = TableEntry (name_rc, Rc::new(value).into());
         self.add(new_entry);
         Ok(())
     }
 
     // add a completely new entry
     pub fn add_entry_literal(&mut self, name: String, value: String) {
-        let new_entry = TableEntry (Rc::new(name), Rc::new(value));
+        let new_entry = TableEntry (Rc::new(name).into(), Rc::new(value).into());
         self.add(new_entry);
     }
     //=========================================
@@ -76,7 +76,7 @@ impl Table {
 
     // this is usefull for the functions that construct a header
     // with out modifing the dyn_table
-    pub fn get_name_rc(&self, index: usize) -> Result<Rc<String>, &'static str> {
+    pub fn get_name_rc(&self, index: usize) -> Result<EntryInner, &'static str> {
         let entry = try!(self.get_entry(index));
         Ok(entry.0.clone())
     }

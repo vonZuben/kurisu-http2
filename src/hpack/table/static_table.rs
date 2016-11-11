@@ -1,11 +1,11 @@
 use std::rc::Rc;
 use std::ops::Index;
 
-use header::HeaderEntry;
+use header::EntryInner;
 
 // Rc is used to wrap the strings because
 // different entries can refer to each other
-pub struct TableEntry (pub Rc<String>, pub Rc<String>);
+pub struct TableEntry (pub EntryInner, pub EntryInner);
 
 // I use this type because it is easier if the HeaderEntry type
 // only has to deal with owned strings
@@ -15,8 +15,7 @@ impl StaticTable {
     pub fn new() -> Self {
         let mut vec = Vec::with_capacity(STATIC_TABLE.len());
         for i in STATIC_TABLE {
-            vec.push(TableEntry (Rc::new(i.0.to_string()),
-                                 Rc::new(i.1.to_string())));
+            vec.push(TableEntry (i.0.into(), i.1.into()));
         }
         StaticTable ( vec )
     }
