@@ -43,14 +43,14 @@ impl Table {
             let entry = try!(self.get_entry(name_id));
             name_rc = entry.0.clone();
         }
-        let new_entry = TableEntry (name_rc, Rc::new(value).into());
+        let new_entry = TableEntry::new(name_rc, value);
         self.add(new_entry);
         Ok(())
     }
 
     // add a completely new entry
     pub fn add_entry_literal(&mut self, name: String, value: String) {
-        let new_entry = TableEntry (Rc::new(name).into(), Rc::new(value).into());
+        let new_entry = TableEntry::new(name, value);
         self.add(new_entry);
     }
     //=========================================
@@ -62,7 +62,7 @@ impl Table {
     // entry would be 62 but you would pass 0 as the index
     pub fn get_header_entry(&self, index: usize) -> Result<HeaderEntry, &'static str> {
         let entry = try!(self.get_entry(index));
-        Ok(HeaderEntry::new(entry.0.clone(), entry.1.clone()))
+        Ok(entry.clone().into())
     }
 
     // quicker way to get the latest entry put into the dynamic table
@@ -71,7 +71,7 @@ impl Table {
     pub fn get_dyn_front(&self) -> HeaderEntry {
         debug_assert!(self.num_dyn_entries() > 0);
         let entry = &self.dyn_table[0];
-        HeaderEntry::new(entry.0.clone(), entry.1.clone())
+        entry.clone().into()
     }
 
     // this is usefull for the functions that construct a header

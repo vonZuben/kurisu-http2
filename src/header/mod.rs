@@ -57,6 +57,12 @@ impl From<Rc<String>> for EntryInner {
     }
 }
 
+impl From<String> for EntryInner {
+    fn from(c: String) -> EntryInner {
+        EntryInner::C(Rc::new(c))
+    }
+}
+
 /// Header list entry with owed or borrowed string
 #[derive(Debug)]
 pub struct HeaderEntry {

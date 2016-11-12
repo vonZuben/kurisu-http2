@@ -192,7 +192,7 @@ impl Decoder {
 
         // the entry to return will always be the latest added
         // entry in the dynamic table for this case
-        let header_entry: HeaderEntry = self.table.get_dyn_front();
+        let header_entry = self.table.get_dyn_front();
         Ok((header_entry, total_consumed))
     }
 
@@ -299,12 +299,12 @@ impl Decoder {
         if index == 0 { // must get name and value from literal
             let name = try!(self.consume_literal(&mut total_consumed, &buf));
             let value = try!(self.consume_literal(&mut total_consumed, &buf));
-            header_entry = HeaderEntry::new(Rc::new(name), Rc::new(value));
+            header_entry = HeaderEntry::new(name, value);
         }
         else { // have name via index
             let name_rc = try!(self.table.get_name_rc(index as usize));
             let value = try!(self.consume_literal(&mut total_consumed, &buf));
-            header_entry = HeaderEntry::new(name_rc, Rc::new(value));
+            header_entry = HeaderEntry::new(name_rc, value);
         }
 
         Ok((header_entry, total_consumed))

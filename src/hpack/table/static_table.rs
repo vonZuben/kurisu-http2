@@ -1,11 +1,30 @@
 use std::rc::Rc;
 use std::ops::Index;
 
-use header::EntryInner;
+use header::{HeaderEntry, EntryInner};
 
 // Rc is used to wrap the strings because
 // different entries can refer to each other
 pub struct TableEntry (pub EntryInner, pub EntryInner);
+
+impl TableEntry {
+    pub fn new<A, B>(name: A, value: B) -> Self
+        where A: Into<EntryInner>, B: Into<EntryInner> {
+        TableEntry ( name.into(), value.into() )
+    }
+}
+
+impl Clone for TableEntry {
+    fn clone(&self) -> TableEntry {
+        TableEntry ( self.0.clone(), self.1.clone() )
+    }
+}
+
+impl From<TableEntry> for HeaderEntry {
+    fn from(entry: TableEntry) -> HeaderEntry {
+        HeaderEntry::new(entry.0, entry.1)
+    }
+}
 
 // I use this type because it is easier if the HeaderEntry type
 // only has to deal with owned strings
