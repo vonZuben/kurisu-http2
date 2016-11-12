@@ -4,7 +4,6 @@
 mod huffman;
 mod integers;
 mod table;
-
 pub mod decoder;
 
 static DEFAULT_SIZE: usize = 4096;

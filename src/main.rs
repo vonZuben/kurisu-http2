@@ -7,8 +7,10 @@ mod debug;
 mod buf;
 use buf::Buf;
 
-mod hpack;
-use hpack::decoder::Decoder;
+mod header;
+use header::*;
+//mod hpack;
+//use hpack::decoder::Decoder;
 
 use openssl::ssl::*;
 
@@ -30,8 +32,6 @@ use frame::Http2Frame;
 mod bititor;
 
 mod request;
-
-mod header;
 
 //#[path = "ssl.rs"]
 //mod ssl;

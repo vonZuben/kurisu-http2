@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::rc::Rc;
 
-use header::{HeaderEntry, EntryInner};
+use header::*;
 
 mod static_table;
 use self::static_table::{StaticTable, TableEntry};

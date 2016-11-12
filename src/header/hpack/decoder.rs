@@ -4,7 +4,7 @@ use super::table::Table;
 use super::integers;
 use super::huffman::Huffman;
 
-use header::{HeaderList, HeaderEntry};
+use header::*;
 
 // private type for representing the result of decoding an entry
 // ( number of bytes used, HeaderEntry )

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::ops::Index;
 
-use header::{HeaderEntry, EntryInner};
+use header::*;
 
 // Rc is used to wrap the strings because
 // different entries can refer to each other
