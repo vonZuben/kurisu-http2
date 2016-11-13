@@ -12,7 +12,7 @@ type DecEntry = Result<(HeaderEntry, usize), &'static str>;
 
 pub struct Decoder {
     table: Table,
-    huffman: Huffman, // this might be temporary, since you should not need to initialize this each time
+    huffman: Huffman,
 }
 
 impl Decoder {
