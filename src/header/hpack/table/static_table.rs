@@ -3,8 +3,9 @@ use std::ops::Index;
 
 use header::*;
 
-// Rc is used to wrap the strings because
-// different entries can refer to each other
+// this is basically identical to a HeaderEntry
+// but this provides a lower level interface
+// to be used "under the hood"
 pub struct TableEntry (pub EntryInner, pub EntryInner);
 
 impl TableEntry {
@@ -26,17 +27,33 @@ impl From<TableEntry> for HeaderEntry {
     }
 }
 
-// I use this type because it is easier if the HeaderEntry type
-// only has to deal with owned strings
-pub struct StaticTable (Vec<TableEntry>);
+struct StaticInner (Vec<TableEntry>);
+// this is safe to be sync because the StaticTable
+// interface that uses it provides no mutability
+unsafe impl Sync for StaticInner {}
 
-impl StaticTable {
-    pub fn new() -> Self {
+lazy_static! {
+    static ref s_tabel: StaticInner = {
         let mut vec = Vec::with_capacity(STATIC_TABLE.len());
         for i in STATIC_TABLE {
             vec.push(TableEntry (i.0.into(), i.1.into()));
         }
-        StaticTable ( vec )
+        drun! {{
+            println!("Initializing static table");
+        }}
+        StaticInner ( vec )
+    };
+}
+
+// rather than just the "actual" static table,
+// I use this statically initialized type so the
+// api between the different header tables is
+// the same everywhere
+pub struct StaticTable (&'static Vec<TableEntry>);
+
+impl StaticTable {
+    pub fn new() -> Self {
+        StaticTable ( &s_tabel.0 )
     }
 }
 

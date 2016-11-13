@@ -5,6 +5,7 @@ authors = ["Chris von Zuben <chris.vonzuben@gmail.com>"]
 
 [dependencies]
 libc = "*"
+lazy_static = "*"
 
 [dependencies.openssl]
 version = "*"
