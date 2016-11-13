@@ -9,37 +9,39 @@ type HuffmanTable = [(u32, u8)];
 /// Decodes Huffman encoded strings
 /// Optimized specialized for http2 Huffman encoded strings
 pub struct Huffman {
-    decode_table: HashMap<(u32, u8), u8>,
+    decode_table: &'static HashMap<(u32, u8), u8>,
     encode_table: &'static HuffmanTable,
 }
 
-impl Huffman {
-    fn with_table(table: &'static HuffmanTable) -> Self {
-        let len = table.len();
+lazy_static! {
+    static ref d_table: HashMap<(u32, u8), u8> = {
+        let len = HUFFMAN_TABLE.len();
 
         let mut hash_map = HashMap::with_capacity(len);
 
         for i in 0..len {
-            hash_map.insert(table[i], i as u8);
+            hash_map.insert(HUFFMAN_TABLE[i], i as u8);
         }
 
         drun!({ // checking the memory efficiency of the huffman encoder/decoder
             use std::mem;
-            println!("huffman static table len: {}", len);
-            println!("huffman table hasmap:\nmain size bytes {} :: Table size bytes {} :: Capacity {}",
-                     mem::size_of::<Self>(),
+            println!("huffman static HUFFMAN_TABLE len: {}", len);
+            println!("huffman HUFFMAN_TABLE hasmap:\nmain size bytes {} :: Table size bytes {} :: Capacity {}",
+                     mem::size_of::<Huffman>(),
                      mem::size_of_val(&hash_map.entry((0x1ff8, 13))) * hash_map.capacity(),
                      hash_map.capacity());
         });
 
-        Huffman {
-            decode_table: hash_map,
-            encode_table: table,
-        }
-    }
+        hash_map
+    };
+}
 
+impl Huffman {
     pub fn new() -> Self {
-        Huffman::with_table(HUFFMAN_TABLE)
+        Huffman {
+            decode_table: &d_table,
+            encode_table: HUFFMAN_TABLE,
+        }
     }
 
     pub fn decode(&self, buf: &[u8]) -> Vec<u8> {
