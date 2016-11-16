@@ -89,6 +89,8 @@ pub fn encode_integer(n: u32, prefix: u8, dest: &mut [u8]) -> u8 {
     let mut n = n;
     let check = ( 1 << prefix ) - 1;
 
+    dest[0] = 0;
+
     if n < check {
         dest[0] |= n as u8;
         return 1;
@@ -142,22 +144,21 @@ mod tests {
 
     #[test]
     fn encode_test() {
-        // simple
         let mut vec = vec![0; 10];
+
+        // simple
         let tst_code = vec![0x4];
         let size = encode_integer(4, 8, &mut vec);
         assert_eq!(size, 1);
         assert_eq!(tst_code, &vec[..size as usize]);
 
         // little less simple
-        let mut vec = vec![0; 10];
         let tst_code = vec![0x03, 0x01];
         let size = encode_integer(4, 2, &mut vec);
         assert_eq!(size, 2);
         assert_eq!(tst_code, &vec[..size as usize]);
 
         // more complex
-        let mut vec = vec![0; 10];
         let tst_code = vec![0x1F, 0x9A, 0x0A];
         let size = encode_integer(1337, 5, &mut vec);
         assert_eq!(size, 3);
