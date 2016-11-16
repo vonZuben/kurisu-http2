@@ -84,9 +84,43 @@ pub fn decode_integer(buf: &[u8], prefix_size: u8) -> Result<(u32, u8), &'static
     Err("hpack integer: not enough octets")
 }
 
+// encode n into dest and return number of bytes consumed
+pub fn encode_integer(n: u32, prefix: u8, dest: &mut [u8]) -> u8 {
+    let mut n = n;
+    let check = ( 1 << prefix ) - 1;
+
+    if n < check {
+        dest[0] |= n as u8;
+        return 1;
+    }
+
+    let mut dest_i = 0;
+    dest[dest_i] |= check as u8;
+
+    n -= check;
+
+    loop {
+        dest_i += 1;
+
+        if n < 128 {
+            dest[dest_i] = n as u8;
+            break;
+        }
+
+        dest[dest_i] = 0x80 | ( n as u8 & 0x7f );
+        n >>= 7;
+
+        if n == 0 {
+            break;
+        }
+    }
+
+    dest_i as u8 + 1
+}
+
 #[cfg(test)]
 mod tests {
-    use super::decode_integer;
+    use super::{decode_integer, encode_integer};
 
     #[test]
     fn decode_test() {
@@ -101,11 +135,45 @@ mod tests {
         assert_eq!(num, (260, 2));
 
         // more complex number
-        let tst_num = vec![0xFF, 0x9A, 0x0A];
+        let tst_num = vec![0x1F, 0x9A, 0x0A];
         let num = decode_integer(&tst_num, 5).unwrap();
         assert_eq!(num, (1337, 3));
     }
+
+    #[test]
+    fn encode_test() {
+        // simple
+        let mut vec = vec![0; 10];
+        let tst_code = vec![0x4];
+        let size = encode_integer(4, 8, &mut vec);
+        assert_eq!(size, 1);
+        assert_eq!(tst_code, &vec[..size as usize]);
+
+        // little less simple
+        let mut vec = vec![0; 10];
+        let tst_code = vec![0x03, 0x01];
+        let size = encode_integer(4, 2, &mut vec);
+        assert_eq!(size, 2);
+        assert_eq!(tst_code, &vec[..size as usize]);
+
+        // more complex
+        let mut vec = vec![0; 10];
+        let tst_code = vec![0x1F, 0x9A, 0x0A];
+        let size = encode_integer(1337, 5, &mut vec);
+        assert_eq!(size, 3);
+        assert_eq!(tst_code, &vec[..size as usize]);
+    }
 }
+
+// encode integer
+// if I < 2^N - 1, encode I on N bits
+// else
+//     encode (2^N - 1) on N bits
+//     I = I - (2^N - 1)
+//     while I >= 128
+//          encode (I % 128 + 128) on 8 bits
+//          I = I / 128
+//     encode I on 8 bits
 
 // decode I from the next N bits
 // if I < 2^N - 1, return I
