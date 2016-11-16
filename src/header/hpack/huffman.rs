@@ -128,13 +128,14 @@ impl Huffman {
                 }
 
                 dest_i += 1;
-                code_i += 1;
                 code_len -= 8 - offset;
-                offset = 0;
                 if code_len <= 0 {
                     offset = code_len;
                     continue;
                 }
+
+                code_i += 1;
+                offset = 0;
             }
 
             // deal with writing each part of the code to dest
