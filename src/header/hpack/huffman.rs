@@ -1,5 +1,6 @@
 
 use std::collections::HashMap;
+use std::slice;
 
 use bititor::BitItor;
 
@@ -50,6 +51,13 @@ impl Huffman {
         let decode_size: usize = f32::ceil(buf.len() as f32 * 1.5) as usize;
         let mut decoded = Vec::with_capacity(decode_size);
 
+        drun!{{
+            for b in buf {
+                print!("{:02X}", b);
+            }
+            println!("");
+        }}
+
         let bits = BitItor::new(buf);
 
         // the encoded bits
@@ -84,6 +92,82 @@ impl Huffman {
         } );
 
         decoded
+    }
+
+    // write the encoded result to dest and return the length of result
+    pub fn encode(&self, src: &[u8], dest: &mut [u8]) -> usize {
+        let mut dest_i = 0; // byte index
+        let mut offset = 0;
+
+        for i in src { // for each char in src as index
+            let mut code_i = 0;
+
+            let encodeing = self.encode_table[*i as usize];
+            let mut code = encodeing.0;
+            let mut code_len = encodeing.1 as i8;
+
+            let shift = 32 - code_len - offset;
+
+            code = code << shift;
+
+            let be_code = u32::to_be(code);
+
+            let code_buf: &[u8] = unsafe { slice::from_raw_parts(&be_code as *const u32 as *const u8, 4) };
+
+            debug_assert!(offset >= 0);
+            // this deal with what happens when a dest byte is
+            // only partial filled by the previous huff code
+            // because the codes need to be tightly packed
+            if offset > 0 {
+                dest[dest_i] |= code_buf[code_i];
+
+                let t_offset = code_len + offset;
+                if t_offset < 8 {
+                    offset = t_offset;
+                    continue;
+                }
+
+                dest_i += 1;
+                code_i += 1;
+                code_len -= 8 - offset;
+                offset = 0;
+                if code_len <= 0 {
+                    offset = code_len;
+                    continue;
+                }
+            }
+
+            // deal with writing each part of the code to dest
+            loop {
+                dest[dest_i] = code_buf[code_i];
+
+                code_len -= 8;
+                if code_len > 0 {
+                    dest_i += 1;
+                }
+                else {
+                    offset = 8 + code_len;
+                    break;
+                }
+
+                code_i += 1;
+            }
+        }
+
+        // write the 1's that "pad" the last dest byte if it
+        // is not completely filled
+        if offset != 0 {
+            let end_bits = 8 - offset;
+            debug_assert!(end_bits < 8 && end_bits > 0);
+            let mut bits = 1;
+            for _ in 0..end_bits - 1 {
+                bits *= 2;
+                bits += 1;
+            }
+            dest[dest_i] |= bits;
+        }
+
+        dest_i + 1
     }
 }
 
@@ -375,5 +459,56 @@ mod huffman_tests {
         println!("decoded value: {}", str::from_utf8(&decoded).unwrap());
 
         assert_eq!(decoded, b"localhost:8080");
+    }
+
+    #[test]
+    fn encode_test() {
+        let mut v = Vec::with_capacity(20);
+        unsafe { v.set_len(20) };
+
+        let s = b"localhost:8080";
+
+        encode(s, &mut v);
+
+        let encoded = [0xA0, 0xE4, 0x1D, 0x13, 0x9D, 0x09, 0xB8, 0xF0, 0x1E, 0x07];
+        assert_eq!(encoded, v[..]);
+
+        // longer test string
+        let s = b"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.116 Safari/537.36";
+
+        let mut v = Vec::with_capacity(100);
+        unsafe { v.set_len(100) };
+        encode(s, &mut v);
+
+        let encoded = [0xD0, 0x7F, 0x66, 0xA2, 0x81, 0xB0, 0xDA, 0xE0, 0x53, 0xFA, 0xFC, 0x08, 0x7E, 0xD4, 0xCE, 0x6A, 0xAD, 0xF2, 0xA7, 0x97, 0x9C, 0x89, 0xC6, 0xBF, 0xB5, 0x21, 0xAE, 0xBA, 0x0B, 0xC8, 0xB1, 0xE6, 0x32, 0x58, 0x6D, 0x97, 0x57, 0x65, 0xC5, 0x3F, 0xAC, 0xD8, 0xF7, 0xE8, 0xCF, 0xF4, 0xA5, 0x06, 0xEA, 0x55, 0x31, 0x14, 0x9D, 0x4F, 0xFD, 0xA9, 0x7A, 0x7B, 0x0F, 0x49, 0x58, 0x6D, 0x95, 0xC0, 0xB8, 0x9D, 0x79, 0xB5, 0xC2, 0x17, 0x14, 0xDC, 0x39, 0x47, 0x61, 0x98, 0x6D, 0x97, 0x57, 0x65, 0xCF];
+
+        for (x, y) in v.iter().zip(encoded.iter()) {
+            assert_eq!(x, y);
+        }
+
+        // another test string
+        let s = b"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8";
+
+        let mut v = Vec::with_capacity(100);
+        unsafe { v.set_len(100) };
+        encode(s, &mut v);
+
+        let encoded = [0x49, 0x7C, 0xA5, 0x89, 0xD3, 0x4D, 0x1F, 0x43, 0xAE, 0xBA, 0x0C, 0x41, 0xA4, 0xC7, 0xA9, 0x8F, 0x33, 0xA6, 0x9A, 0x3F, 0xDF, 0x9A, 0x68, 0xFA, 0x1D, 0x75, 0xD0, 0x62, 0x0D, 0x26, 0x3D, 0x4C, 0x79, 0xA6, 0x8F, 0xBE, 0xD0, 0x01, 0x77, 0xFE, 0x8D, 0x48, 0xE6, 0x2B, 0x1E, 0x0B, 0x1D, 0x7F, 0x5F, 0x2C, 0x7C, 0xFD, 0xF6, 0x80, 0x0B, 0xBD];
+
+        for (x, y) in v.iter().zip(encoded.iter()) {
+            assert_eq!(x, y);
+        }
+    }
+
+    fn encode(src: &[u8], dest: &mut Vec<u8>) {
+        let huff = Huffman::new();
+        let size = huff.encode(src, dest);
+
+        unsafe { dest.set_len(size) };
+
+        for b in dest {
+            print!("{:02X}", b);
+        }
+        println!("");
     }
 }
