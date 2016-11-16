@@ -146,6 +146,10 @@ impl Huffman {
                 if code_len > 0 {
                     dest_i += 1;
                 }
+                else if code_len == 0 {
+                    dest_i += 1;
+                    break;
+                }
                 else {
                     offset = 8 + code_len;
                     break;
