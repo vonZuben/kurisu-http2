@@ -164,10 +164,9 @@ impl Huffman {
         if offset != 0 {
             let end_bits = 8 - offset;
             debug_assert!(end_bits < 8 && end_bits > 0);
-            let mut bits = 1;
-            for _ in 0..end_bits - 1 {
-                bits *= 2;
-                bits += 1;
+            let mut bits = 0;
+            for _ in 0..end_bits {
+                bits = ( bits << 1) | 1;
             }
             dest[dest_i] |= bits;
         }
