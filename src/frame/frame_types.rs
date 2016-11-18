@@ -52,7 +52,7 @@ macro_rules! impl_buf_frame {
 
 impl_debug_print!( GenericFrame );
 
-impl_buf_frame!( HeadersFrame );
+impl_buf_frame!( HeadersFrame, DataFrame );
 
 // ================================================
 // the major header types are defined as follows
@@ -103,7 +103,7 @@ pub struct HeadersFrame<'buf> {
     buf: &'buf mut [u8],
 }
 
-impl<'obj, 'buf> HeadersFrame<'buf> where HeadersFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj{
+impl<'obj, 'buf> HeadersFrame<'buf> where HeadersFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
 
     // private utility functions
     // =============================
@@ -160,11 +160,47 @@ impl<'obj, 'buf> HeadersFrame<'buf> where HeadersFrame<'buf>: Http2Frame<'obj, '
     }
 }
 
+/// ===============================
+/// DATA
+/// ===============================
+/// DATA frames (type=0x0) convey arbitrary, variable-length sequences of octets associated with a stream. One or more DATA frames are used, for instance, to carry HTTP request or response payloads.
+///
+///  +---------------+
+///  |Pad Length? (8)|
+///  +---------------+-----------------------------------------------+
+///  |                            Data (*)                         ...
+///  +---------------------------------------------------------------+
+///  |                           Padding (*)                       ...
+///  +---------------------------------------------------------------+
+/// Figure 6: DATA Frame Payload
+///
+
+pub struct DataFrame<'buf> {
+    buf: &'buf mut [u8],
+}
+
+impl<'obj, 'buf> DataFrame<'buf> where DataFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+
+    fn padded(&'obj self) -> bool {
+        self.get_flags() & PADDED != 0
+    }
+
+    pub fn get_data(&'obj self) -> &[u8] {
+        match self.padded() {
+            false => &self.payload()[0..],
+            true  => {
+                let end = self.payload().len() - self.payload()[0] as usize;
+                &self.payload()[1..end]
+            }
+        }
+    }
+
+}
+
 #[cfg(test)]
 mod frame_type_tests {
 
-    use super::GenericFrame;
-    use super::HeadersFrame;
+    use super::*;
     use buf::Buf;
 
     #[test]
@@ -236,5 +272,16 @@ mod frame_type_tests {
         assert_eq!(weight, 255);
 
         assert_eq!(headers.get_header_block_fragment()[..], bc[15..]);
+    }
+
+    #[test]
+    fn data_frame_tests() {
+        let mut buf = vec![0x00, 0x00, 0x04, 0x01, 0x08, 0x00, 0x00, 0x00, 0x01, 0x01, 0xFF, 0xFF, 0x10];
+
+        let bc = buf.clone();
+
+        let data : DataFrame = GenericFrame::point_to(&mut buf).into();
+
+        assert_eq!(data.get_data()[..], bc[10..12]);
     }
 }
