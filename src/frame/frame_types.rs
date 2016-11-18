@@ -16,10 +16,16 @@ pub struct GenericFrame<'buf> {
 impl_buf!( u8 : buf => GenericFrame; );
 impl<'obj, 'buf> Http2Frame<'obj, 'buf> for GenericFrame<'buf> where 'buf: 'obj {}
 
-impl<'a> fmt::Debug for GenericFrame<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "length: {}, type: 0x{:02X}, flags: 0x{:02X}, s_ident: {}, payload {:?}",
-               self.get_length(), self.get_type(), self.get_flags(), self.get_s_identifier(), self.payload())
+macro_rules! impl_debug_print {
+    ( $($typename:ident),+ ) => {
+        $(
+            impl<'a> fmt::Debug for $typename<'a> {
+                fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+                    write!(f, "length: {}, type: 0x{:02X}, flags: 0x{:02X}, s_ident: {}, payload {:?}",
+                           self.get_length(), self.get_type(), self.get_flags(), self.get_s_identifier(), self.payload())
+                }
+            }
+        )*
     }
 }
 
@@ -39,9 +45,12 @@ macro_rules! impl_buf_frame {
             impl_buf!( u8 : buf => $typename; );
             impl<'obj, 'buf> Http2Frame<'obj, 'buf> for $typename<'buf> where 'buf: 'obj {}
             impl_frame_type!( $typename );
+            impl_debug_print!( $typename );
         )*
     }
 }
+
+impl_debug_print!( GenericFrame );
 
 impl_buf_frame!( HeadersFrame );
 
