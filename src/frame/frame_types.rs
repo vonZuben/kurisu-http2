@@ -22,7 +22,7 @@ macro_rules! impl_debug_print {
             impl<'a> fmt::Debug for $typename<'a> {
                 fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
                     write!(f, "length: {}, type: 0x{:02X}, flags: 0x{:02X}, s_ident: {}, payload {:?}",
-                           self.get_length(), self.get_type(), self.get_flags(), self.get_s_identifier(), self.payload())
+                           self.get_length(), self.get_type(), self.get_flags(), self.get_stream_id(), self.payload())
                 }
             }
         )*
@@ -52,7 +52,7 @@ macro_rules! impl_buf_frame {
 
 impl_debug_print!( GenericFrame );
 
-impl_buf_frame!( HeadersFrame, DataFrame );
+impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame );
 
 // ================================================
 // the major header types are defined as follows
@@ -197,6 +197,33 @@ impl<'obj, 'buf> DataFrame<'buf> where DataFrame<'buf>: Http2Frame<'obj, 'buf>, 
 
 }
 
+/// ===============================
+/// PRIORITY
+/// ===============================
+/// The PRIORITY frame (type=0x2) specifies the sender-advised priority of a stream (Section 5.3). It can be sent in any stream state, including idle or closed streams.
+///
+///  +-+-------------------------------------------------------------+
+///  |E|                  Stream Dependency (31)                     |
+///  +-+-------------+-----------------------------------------------+
+///  |   Weight (8)  |
+///  +-+-------------+
+/// Figure 8: PRIORITY Frame Payload
+
+pub struct PriorityFrame<'buf> {
+    buf: &'buf mut [u8],
+}
+
+impl<'obj, 'buf> PriorityFrame<'buf> where PriorityFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+
+    pub fn get_priority_info(&'obj self) -> (bool, u32, u8) {
+        let buf = &self.payload()[..];
+        let stream_dep = unsafe { getu32_from_be(&buf[0..4]) };
+        let exclusive = stream_dep & 0x80000000 != 0;
+        let weight = buf[4];
+        (exclusive, stream_dep & 0x7FFFFFFF, weight)
+    }
+}
+
 #[cfg(test)]
 mod frame_type_tests {
 
@@ -284,4 +311,14 @@ mod frame_type_tests {
 
         assert_eq!(data.get_data()[..], bc[10..12]);
     }
+
+    #[test]
+    fn priority_frame_tests() {
+        let mut buf = vec![0x00, 0x00, 0x04, 0x01, 0x08, 0x00, 0x00, 0x00, 0x01, 0x80, 0x00, 0x00, 0x01, 0x05];
+
+        let priority : PriorityFrame = GenericFrame::point_to(&mut buf).into();
+
+        assert_eq!(priority.get_priority_info(), (true, 1, 5));
+    }
+
 }

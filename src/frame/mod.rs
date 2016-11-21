@@ -64,7 +64,7 @@ pub trait Http2Frame<'obj, 'buf> : Buf<'obj, 'buf, u8> {
         self.buf()[4]
     }
 
-    fn get_s_identifier(&'obj self) -> u32 {
+    fn get_stream_id(&'obj self) -> u32 {
         let buf = self.buf();
         u32::from_be( unsafe { mem::transmute([ buf[5] & 0x7F, buf[6], buf[7], buf[8] ]) } )
     }
@@ -92,7 +92,7 @@ pub trait Http2Frame<'obj, 'buf> : Buf<'obj, 'buf, u8> {
         self.mut_buf()[4] = f_flags;
     }
 
-    fn set_s_identifier(&'obj mut self, s_identifier: u32) {
+    fn set_stream_id(&'obj mut self, s_identifier: u32) {
         let ident_u8 : &[u8; 4] = unsafe { mem::transmute(&s_identifier.to_be()) };
         debug_assert_eq!(ident_u8[0] & 0x80, 0);
         let buf = self.mut_buf();
@@ -143,7 +143,7 @@ mod http2_frame_tests {
         assert_eq!(frame.get_length(), 238);
         assert_eq!(frame.get_type(), 1);
         assert_eq!(frame.get_flags(), 0x25);
-        assert_eq!(frame.get_s_identifier(), 1);
+        assert_eq!(frame.get_stream_id(), 1);
         assert_eq!(frame.payload()[..], TST_FRAME[9..]);
     }
 
@@ -156,7 +156,7 @@ mod http2_frame_tests {
         frame.set_length(238);
         frame.set_type(1);
         frame.set_flags(0x25);
-        frame.set_s_identifier(1);
+        frame.set_stream_id(1);
         frame.mut_payload()[0] = 0x80;
 
         assert_eq!(frame.buf()[..], TST_FRAME[..]);
