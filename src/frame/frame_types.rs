@@ -52,7 +52,7 @@ macro_rules! impl_buf_frame {
 
 impl_debug_print!( GenericFrame );
 
-impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame );
+impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame );
 
 // ================================================
 // the major header types are defined as follows
@@ -224,6 +224,28 @@ impl<'obj, 'buf> PriorityFrame<'buf> where PriorityFrame<'buf>: Http2Frame<'obj,
     }
 }
 
+/// ===============================
+/// RST_STREAM
+/// ===============================
+/// The RST_STREAM frame (type=0x3) allows for immediate termination of a stream. RST_STREAM is sent to request cancellation of a stream or to indicate that an error condition has occurred.
+///
+///  +---------------------------------------------------------------+
+///  |                        Error Code (32)                        |
+///  +---------------------------------------------------------------+
+/// Figure 9: RST_STREAM Frame Payload
+
+pub struct RstStreamFrame<'buf> {
+    buf: &'buf mut [u8],
+}
+
+impl<'obj, 'buf> RstStreamFrame<'buf> where RstStreamFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+
+    pub fn get_error_code(&'obj self) -> u32 {
+        let buf = &self.payload()[..];
+        unsafe { getu32_from_be(&buf[0..4]) }
+    }
+}
+
 #[cfg(test)]
 mod frame_type_tests {
 
@@ -303,7 +325,7 @@ mod frame_type_tests {
 
     #[test]
     fn data_frame_tests() {
-        let mut buf = vec![0x00, 0x00, 0x04, 0x01, 0x08, 0x00, 0x00, 0x00, 0x01, 0x01, 0xFF, 0xFF, 0x10];
+        let mut buf = vec![0x00, 0x00, 0x04, 0x00, 0x08, 0x00, 0x00, 0x00, 0x01, 0x01, 0xFF, 0xFF, 0x10];
 
         let bc = buf.clone();
 
@@ -314,11 +336,20 @@ mod frame_type_tests {
 
     #[test]
     fn priority_frame_tests() {
-        let mut buf = vec![0x00, 0x00, 0x04, 0x01, 0x08, 0x00, 0x00, 0x00, 0x01, 0x80, 0x00, 0x00, 0x01, 0x05];
+        let mut buf = vec![0x00, 0x00, 0x05, 0x02, 0x08, 0x00, 0x00, 0x00, 0x01, 0x80, 0x00, 0x00, 0x01, 0x05];
 
         let priority : PriorityFrame = GenericFrame::point_to(&mut buf).into();
 
         assert_eq!(priority.get_priority_info(), (true, 1, 5));
+    }
+
+    #[test]
+    fn rst_stream_frame_tests() {
+        let mut buf = vec![0x00, 0x00, 0x04, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x05];
+
+        let priority : RstStreamFrame = GenericFrame::point_to(&mut buf).into();
+
+        assert_eq!(priority.get_error_code(), 5);
     }
 
 }
