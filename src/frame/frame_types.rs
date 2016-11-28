@@ -52,7 +52,7 @@ macro_rules! impl_buf_frame {
 
 impl_debug_print!( GenericFrame );
 
-impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame );
+impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame, SettingsFrame );
 
 // ================================================
 // the major header types are defined as follows
@@ -88,6 +88,15 @@ unsafe fn getu32_from_be(buf: &[u8]) -> u32 {
     let mut num : u32 = mem::uninitialized();
     ptr::copy(buf.as_ptr(), &mut num as *mut u32 as *mut u8, 4);
     u32::from_be(num)
+}
+
+// helper function to get 16bit numbers from the big endian input stream
+unsafe fn getu16_from_be(buf: &[u8]) -> u16 {
+    use std::ptr;
+    debug_assert_eq!(buf.len(), 2);
+    let mut num : u16 = mem::uninitialized();
+    ptr::copy(buf.as_ptr(), &mut num as *mut u16 as *mut u8, 2);
+    u16::from_be(num)
 }
 
 // helper for HeadersFrame to determine the state of PADDED and PRIORITY flags
@@ -246,6 +255,54 @@ impl<'obj, 'buf> RstStreamFrame<'buf> where RstStreamFrame<'buf>: Http2Frame<'ob
     }
 }
 
+/// ===============================
+/// SETTINGS
+/// ===============================
+/// The SETTINGS frame (type=0x4) conveys configuration parameters that affect how endpoints communicate, such as preferences and constraints on peer behavior. The SETTINGS frame is also used to acknowledge the receipt of those parameters. Individually, a SETTINGS parameter can also be referred to as a "setting".
+///
+/// 6.5.1 SETTINGS Format
+///
+/// The payload of a SETTINGS frame consists of zero or more parameters, each consisting of an unsigned 16-bit setting identifier and an unsigned 32-bit value.
+///
+///  +-------------------------------+
+///  |       Identifier (16)         |
+///  +-------------------------------+-------------------------------+
+///  |                        Value (32)                             |
+///  +---------------------------------------------------------------+
+/// Figure 10: Setting Format
+
+pub struct SettingParam {
+    id: u16,
+    value: u32,
+}
+
+pub struct SettingsFrame<'buf> {
+    buf: &'buf mut [u8],
+}
+
+impl<'obj, 'buf> SettingsFrame<'buf> where SettingsFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+
+    // return an array filled with the setting parameters from the frame
+    pub fn get_settings_paramaters(&'obj self) -> Vec<SettingParam> {
+        let length = self.get_length();
+        debug_assert!(length % 6 == 0); // should probably make this a hard check and return an error
+        // actually just note here that a lot more error checking should be done
+        let num_params = length as usize / 6;
+
+        let mut vec = Vec::with_capacity(num_params);
+
+        let buf = &self.payload()[..];
+        let mut n = 0; // point to the start of each param
+        for i in 0..num_params {
+            let id = unsafe { getu16_from_be(&buf[n..n+2]) };
+            let value = unsafe { getu32_from_be(&buf[n+2..n+6]) };
+            vec.push(SettingParam { id: id, value: value });
+            n += 6;
+        }
+        vec
+    }
+}
+
 #[cfg(test)]
 mod frame_type_tests {
 
@@ -352,4 +409,17 @@ mod frame_type_tests {
         assert_eq!(priority.get_error_code(), 5);
     }
 
+    #[test]
+    fn settings_frame_tests() {
+        let mut buf = vec![0x00, 0x00, 0x0C, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x03, 0x00, 0x02, 0x00, 0x00, 0x00, 0x05];
+
+        let sframe : SettingsFrame = GenericFrame::point_to(&mut buf).into();
+
+        let params =sframe.get_settings_paramaters();
+
+        assert_eq!(params[0].id, 1);
+        assert_eq!(params[0].value, 3);
+        assert_eq!(params[1].id, 2);
+        assert_eq!(params[1].value, 5);
+    }
 }
