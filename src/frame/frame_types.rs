@@ -52,7 +52,7 @@ macro_rules! impl_buf_frame {
 
 impl_debug_print!( GenericFrame );
 
-impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame, SettingsFrame, PushPromiseFrame );
+impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame, SettingsFrame, PushPromiseFrame, PingFrame );
 
 // ================================================
 // the major header types are defined as follows
@@ -345,6 +345,32 @@ impl<'obj, 'buf> PushPromiseFrame<'buf> where PushPromiseFrame<'buf>: Http2Frame
     }
 }
 
+/// ===============================
+/// PING
+/// ===============================
+/// The PING frame (type=0x6) is a mechanism for measuring a minimal round-trip time from the sender, as well as determining whether an idle connection is still functional. PING frames can be sent from any endpoint.
+///
+///  +---------------------------------------------------------------+
+///  |                                                               |
+///  |                      Opaque Data (64)                         |
+///  |                                                               |
+///  +---------------------------------------------------------------+
+/// Figure 12: PING Payload Format
+
+pub struct PingFrame<'buf> {
+    buf: &'buf mut [u8],
+}
+
+impl<'obj, 'buf> PingFrame<'buf> where PingFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+
+    // returns reg to that data - equivelent to the payload function but checks for valid size
+    pub fn get_ping_data(&'obj self) -> &'obj [u8] {
+        let buf = &self.payload();
+        debug_assert_eq!(buf.len(), 8);
+        buf
+    }
+}
+
 #[cfg(test)]
 mod frame_type_tests {
 
@@ -474,5 +500,16 @@ mod frame_type_tests {
         let push_frame : PushPromiseFrame = GenericFrame::point_to(&mut buf).into();
 
         assert_eq!(push_frame.get_push_data(), (7, &bc[13..]));
+    }
+
+    #[test]
+    fn ping_frame_tests() {
+        let mut buf = vec![0x00, 0x00, 0x08, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x02, 0x00, 0x00, 0x00, 0x05];
+
+        let bc = buf.clone();
+
+        let ping_frame : PingFrame = GenericFrame::point_to(&mut buf).into();
+
+        assert_eq!(ping_frame.get_ping_data(), &bc[9..]);
     }
 }
