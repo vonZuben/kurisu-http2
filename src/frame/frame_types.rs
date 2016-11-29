@@ -52,7 +52,7 @@ macro_rules! impl_buf_frame {
 
 impl_debug_print!( GenericFrame );
 
-impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame, SettingsFrame );
+impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame, SettingsFrame, PushPromiseFrame );
 
 // ================================================
 // the major header types are defined as follows
@@ -303,6 +303,48 @@ impl<'obj, 'buf> SettingsFrame<'buf> where SettingsFrame<'buf>: Http2Frame<'obj,
     }
 }
 
+/// ===============================
+/// PUSH_PROMISE
+/// ===============================
+/// The PUSH_PROMISE frame (type=0x5) is used to notify the peer endpoint in advance of streams the sender intends to initiate. The PUSH_PROMISE frame includes the unsigned 31-bit identifier of the stream the endpoint plans to create along with a set of headers that provide additional context for the stream. Section 8.2 contains a thorough description of the use of PUSH_PROMISE frames.
+///
+///  +---------------+
+///  |Pad Length? (8)|
+///  +-+-------------+-----------------------------------------------+
+///  |R|                  Promised Stream ID (31)                    |
+///  +-+-----------------------------+-------------------------------+
+///  |                   Header Block Fragment (*)                 ...
+///  +---------------------------------------------------------------+
+///  |                           Padding (*)                       ...
+///  +---------------------------------------------------------------+
+/// Figure 11: PUSH_PROMISE Payload Format
+
+pub struct PushPromiseFrame<'buf> {
+    buf: &'buf mut [u8],
+}
+
+impl<'obj, 'buf> PushPromiseFrame<'buf> where PushPromiseFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+
+    fn padded(&'obj self) -> bool {
+        self.get_flags() & PADDED != 0
+    }
+
+    // return the stream id for the push and a ref to the header block fragment
+    pub fn get_push_data(&'obj self) -> (u32, &[u8]) {
+        let (padding, buf) = match self.padded() {
+            true  => {
+                (self.payload()[0], &self.payload()[1..])
+            },
+            false => {
+                (0, &self.payload()[0..])
+            },
+        };
+        let id = unsafe { getu32_from_be(&buf[..4]) };
+        let end = buf.len() - padding as usize;
+        (id & 0x7FFFFFFF, &self.payload()[4..end])
+    }
+}
+
 #[cfg(test)]
 mod frame_type_tests {
 
@@ -421,5 +463,16 @@ mod frame_type_tests {
         assert_eq!(params[0].value, 3);
         assert_eq!(params[1].id, 2);
         assert_eq!(params[1].value, 5);
+    }
+
+    #[test]
+    fn push_promise_frame_tests() {
+        let mut buf = vec![0x00, 0x00, 0x0C, 0x05, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x07, 0x00, 0x03, 0x00, 0x02, 0x00, 0x00, 0x00, 0x05];
+
+        let bc = buf.clone();
+
+        let push_frame : PushPromiseFrame = GenericFrame::point_to(&mut buf).into();
+
+        assert_eq!(push_frame.get_push_data(), (7, &bc[13..]));
     }
 }
