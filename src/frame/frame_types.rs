@@ -52,7 +52,7 @@ macro_rules! impl_buf_frame {
 
 impl_debug_print!( GenericFrame );
 
-impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame, SettingsFrame, PushPromiseFrame, PingFrame, GoAwayFrame, WindowUpdateFrame );
+impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame, SettingsFrame, PushPromiseFrame, PingFrame, GoAwayFrame, WindowUpdateFrame, ContinuationFrame );
 
 // ================================================
 // the major header types are defined as follows
@@ -422,6 +422,27 @@ impl<'obj, 'buf> WindowUpdateFrame<'buf> where WindowUpdateFrame<'buf>: Http2Fra
     }
 }
 
+/// ===============================
+/// CONTINUATION
+/// ===============================
+/// The CONTINUATION frame (type=0x9) is used to continue a sequence of header block fragments (Section 4.3). Any number of CONTINUATION frames can be sent, as long as the preceding frame is on the same stream and is a HEADERS, PUSH_PROMISE, or CONTINUATION frame without the END_HEADERS flag set.
+///
+///  +---------------------------------------------------------------+
+///  |                   Header Block Fragment (*)                 ...
+///  +---------------------------------------------------------------+
+/// Figure 15: CONTINUATION Frame Payload
+
+pub struct ContinuationFrame<'buf> {
+    buf: &'buf mut [u8],
+}
+
+impl<'obj, 'buf> ContinuationFrame<'buf> where ContinuationFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+
+    pub fn get_contuniation(&'obj self) -> &'obj [u8] {
+        &self.payload()[..]
+    }
+}
+
 #[cfg(test)]
 mod frame_type_tests {
 
@@ -577,12 +598,23 @@ mod frame_type_tests {
 
     #[test]
     fn window_update_frame_tests() {
-        let mut buf = vec![0x00, 0x00, 0x0C, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x90];
+        let mut buf = vec![0x00, 0x00, 0x0C, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x90];
 
         let bc = buf.clone();
 
         let window_update_frame : WindowUpdateFrame = GenericFrame::point_to(&mut buf).into();
 
         assert_eq!(window_update_frame.get_window_update(), 400);
+    }
+
+    #[test]
+    fn continuation_frame_tests() {
+        let mut buf = vec![0x00, 0x00, 0x0C, 0x09, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x90, 0xFF];
+
+        let bc = buf.clone();
+
+        let continuation : ContinuationFrame = GenericFrame::point_to(&mut buf).into();
+
+        assert_eq!(continuation.get_contuniation(), &bc[9..]);
     }
 }
