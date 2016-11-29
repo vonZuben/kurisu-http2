@@ -52,7 +52,7 @@ macro_rules! impl_buf_frame {
 
 impl_debug_print!( GenericFrame );
 
-impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame, SettingsFrame, PushPromiseFrame, PingFrame, GoAwayFrame );
+impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame, SettingsFrame, PushPromiseFrame, PingFrame, GoAwayFrame, WindowUpdateFrame );
 
 // ================================================
 // the major header types are defined as follows
@@ -399,6 +399,29 @@ impl<'obj, 'buf> GoAwayFrame<'buf> where GoAwayFrame<'buf>: Http2Frame<'obj, 'bu
     }
 }
 
+/// ===============================
+/// WINDOW_UPDATE
+/// ===============================
+/// The WINDOW_UPDATE frame (type=0x8) is used to implement flow control; see Section 5.2 for an overview.
+///
+///  +-+-------------------------------------------------------------+
+///  |R|              Window Size Increment (31)                     |
+///  +-+-------------------------------------------------------------+
+/// Figure 14: WINDOW_UPDATE Payload Format
+
+pub struct WindowUpdateFrame<'buf> {
+    buf: &'buf mut [u8],
+}
+
+impl<'obj, 'buf> WindowUpdateFrame<'buf> where WindowUpdateFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+
+    pub fn get_window_update(&'obj self) -> u32 {
+        let buf = &self.payload()[..];
+        debug_assert_eq!(buf.len(), 4);
+        unsafe { getu32_from_be(buf) }
+    }
+}
+
 #[cfg(test)]
 mod frame_type_tests {
 
@@ -550,5 +573,16 @@ mod frame_type_tests {
         let go_away_frame : GoAwayFrame = GenericFrame::point_to(&mut buf).into();
 
         assert_eq!(go_away_frame.get_go_away_info(), (2, 5, &b"03"[..]));
+    }
+
+    #[test]
+    fn window_update_frame_tests() {
+        let mut buf = vec![0x00, 0x00, 0x0C, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x90];
+
+        let bc = buf.clone();
+
+        let window_update_frame : WindowUpdateFrame = GenericFrame::point_to(&mut buf).into();
+
+        assert_eq!(window_update_frame.get_window_update(), 400);
     }
 }
