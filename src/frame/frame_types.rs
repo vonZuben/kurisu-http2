@@ -52,7 +52,7 @@ macro_rules! impl_buf_frame {
 
 impl_debug_print!( GenericFrame );
 
-impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame, SettingsFrame, PushPromiseFrame, PingFrame );
+impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame, SettingsFrame, PushPromiseFrame, PingFrame, GoAwayFrame );
 
 // ================================================
 // the major header types are defined as follows
@@ -371,6 +371,34 @@ impl<'obj, 'buf> PingFrame<'buf> where PingFrame<'buf>: Http2Frame<'obj, 'buf>, 
     }
 }
 
+/// ===============================
+/// GOAWAY
+/// ===============================
+/// The GOAWAY frame (type=0x7) is used to initiate shutdown of a connection or to signal serious error conditions. GOAWAY allows an endpoint to gracefully stop accepting new streams while still finishing processing of previously established streams. This enables administrative actions, like server maintenance.
+///
+///  +-+-------------------------------------------------------------+
+///  |R|                  Last-Stream-ID (31)                        |
+///  +-+-------------------------------------------------------------+
+///  |                      Error Code (32)                          |
+///  +---------------------------------------------------------------+
+///  |                  Additional Debug Data (*)                    |
+///  +---------------------------------------------------------------+
+/// Figure 13: GOAWAY Payload Format
+
+pub struct GoAwayFrame<'buf> {
+    buf: &'buf mut [u8],
+}
+
+impl<'obj, 'buf> GoAwayFrame<'buf> where GoAwayFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+
+    pub fn get_go_away_info(&'obj self) -> (u32, u32, &'obj [u8]) {
+        let buf = &self.payload();
+        let last_stread_id = unsafe { getu32_from_be(&buf[0..4]) & 0x7FFFFFFF };
+        let error_code = unsafe { getu32_from_be(&buf[4..8]) };
+        (last_stread_id, error_code, &buf[8..])
+    }
+}
+
 #[cfg(test)]
 mod frame_type_tests {
 
@@ -511,5 +539,16 @@ mod frame_type_tests {
         let ping_frame : PingFrame = GenericFrame::point_to(&mut buf).into();
 
         assert_eq!(ping_frame.get_ping_data(), &bc[9..]);
+    }
+
+    #[test]
+    fn go_away_frame_tests() {
+        let mut buf = vec![0x00, 0x00, 0x0C, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x05, 0x30, 0x33];
+
+        let bc = buf.clone();
+
+        let go_away_frame : GoAwayFrame = GenericFrame::point_to(&mut buf).into();
+
+        assert_eq!(go_away_frame.get_go_away_info(), (2, 5, &b"03"[..]));
     }
 }
