@@ -1,11 +1,23 @@
 //! All Frame Types detailed in the standard HTTP2 specification.
 //! These all extend Http2Frame in order to map out the respective
 //! frame types.
+//! Internet Engineering Task Force (IETF)
+//! Request for Comments: 7540
 
 use std::mem;
 use std::fmt;
 use buf::Buf;
 use super::Http2Frame;
+
+use self::flags::*;
+
+// This mod is just used to organize all the flags used by the frames
+pub mod flags {
+    pub const END_STREAM : u8 = 0x1;
+    pub const END_HEADERS : u8 = 0x4;
+    pub const PADDED : u8 = 0x8;
+    pub const PRIORITY : u8 = 0x20;
+}
 
 /// Type used to read initial data from peer.
 /// Used to determine type of frame for further specialization
@@ -56,33 +68,9 @@ macro_rules! create_frame_type {
             $code
     }
 }
-
-// ================================================
-// the major header types are defined as follows
-// ================================================
-
-const END_STREAM : u8 = 0x1;
-const END_HEADERS : u8 = 0x4;
-const PADDED : u8 = 0x8;
-const PRIORITY : u8 = 0x20;
-
-/// ===============================
-/// HEADERS
-/// ===============================
-///
-/// +---------------+
-///  |Pad Length? (8)|
-///  +-+-------------+-----------------------------------------------+
-///  |E|                 Stream Dependency? (31)                     |
-///  +-+-------------+-----------------------------------------------+
-///  |  Weight? (8)  |
-///  +-+-------------+-----------------------------------------------+
-///  |                   Header Block Fragment (*)                 ...
-///  +---------------------------------------------------------------+
-///  |                           Padding (*)                       ...
-///  +---------------------------------------------------------------+
-/// Figure 7: HEADERS Frame Payload
-///
+// ==============================================================
+// These functions are used to read numbers from the input stream
+// ==============================================================
 
 // helper function to get 32bit numbers from the big endian input stream
 unsafe fn getu32_from_be(buf: &[u8]) -> u32 {
@@ -102,6 +90,28 @@ unsafe fn getu16_from_be(buf: &[u8]) -> u16 {
     u16::from_be(num)
 }
 
+// ================================================
+// the major header types are defined as follows
+// ================================================
+
+/// ===============================
+/// HEADERS
+/// ===============================
+///
+/// +---------------+
+///  |Pad Length? (8)|
+///  +-+-------------+-----------------------------------------------+
+///  |E|                 Stream Dependency? (31)                     |
+///  +-+-------------+-----------------------------------------------+
+///  |  Weight? (8)  |
+///  +-+-------------+-----------------------------------------------+
+///  |                   Header Block Fragment (*)                 ...
+///  +---------------------------------------------------------------+
+///  |                           Padding (*)                       ...
+///  +---------------------------------------------------------------+
+/// Figure 7: HEADERS Frame Payload
+///
+
 // helper for HeadersFrame to determine the state of PADDED and PRIORITY flags
 enum PadPrioState {
     PaddedOnly,
@@ -117,7 +127,6 @@ pub struct HeaderData<'obj> {
     pub header_block_fragment: &'obj [u8],
 }
 
-/// A Map for buffers that contains frames of type HEADERS
 create_frame_type!{
     HeadersFrame {
 
