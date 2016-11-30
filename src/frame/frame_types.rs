@@ -271,9 +271,25 @@ impl<'obj, 'buf> RstStreamFrame<'buf> where RstStreamFrame<'buf>: Http2Frame<'ob
 ///  +---------------------------------------------------------------+
 /// Figure 10: Setting Format
 
-pub struct SettingParam {
-    id: u16,
-    value: u32,
+pub struct Settings<'obj> {
+    s_buf: &'obj [u8],
+}
+
+impl<'obj> Iterator for Settings<'obj> {
+    type Item = (u16, u32); // id / value
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let buf : &[u8] = &self.s_buf;
+        if buf.len() == 0 {
+            None
+        }
+        else {
+            let id = unsafe { getu16_from_be(&buf[0..2]) };
+            let value = unsafe { getu32_from_be(&buf[2..6]) };
+            self.s_buf = &buf[6..];
+            Some((id, value))
+        }
+    }
 }
 
 pub struct SettingsFrame<'buf> {
@@ -283,23 +299,11 @@ pub struct SettingsFrame<'buf> {
 impl<'obj, 'buf> SettingsFrame<'buf> where SettingsFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
 
     // return an array filled with the setting parameters from the frame
-    pub fn get_settings_paramaters(&'obj self) -> Vec<SettingParam> {
+    pub fn get_settings_paramaters(&'obj self) -> Settings {
         let length = self.get_length();
         debug_assert!(length % 6 == 0); // should probably make this a hard check and return an error
         // actually just note here that a lot more error checking should be done
-        let num_params = length as usize / 6;
-
-        let mut vec = Vec::with_capacity(num_params);
-
-        let buf = &self.payload()[..];
-        let mut n = 0; // point to the start of each param
-        for i in 0..num_params {
-            let id = unsafe { getu16_from_be(&buf[n..n+2]) };
-            let value = unsafe { getu32_from_be(&buf[n+2..n+6]) };
-            vec.push(SettingParam { id: id, value: value });
-            n += 6;
-        }
-        vec
+        Settings { s_buf: &self.payload()[..] }
     }
 }
 
@@ -555,12 +559,11 @@ mod frame_type_tests {
 
         let sframe : SettingsFrame = GenericFrame::point_to(&mut buf).into();
 
-        let params =sframe.get_settings_paramaters();
+        let mut params = sframe.get_settings_paramaters();
 
-        assert_eq!(params[0].id, 1);
-        assert_eq!(params[0].value, 3);
-        assert_eq!(params[1].id, 2);
-        assert_eq!(params[1].value, 5);
+        assert_eq!(params.next(), Some((1, 3)));
+        assert_eq!(params.next(), Some((2, 5)));
+        assert_eq!(params.next(), None);
     }
 
     #[test]
