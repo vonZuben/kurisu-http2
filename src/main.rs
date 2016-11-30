@@ -164,7 +164,7 @@ fn handle_client<T: Read + Write + Debug>(mut stream: T) {
                     println!("{:?}", frame);
                     let hf: HeadersFrame = frame.into();
                     let mut dec = Decoder::new(4096, 20);
-                    let res = dec.get_header_list(hf.get_header_block_fragment());
+                    let res = dec.get_header_list(hf.get_header_data().header_block_fragment);
 
                     match res {
                         Ok(hl) => {

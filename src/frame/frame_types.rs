@@ -110,6 +110,13 @@ enum PadPrioState {
     Neither,
 }
 
+// All the data that can be expected to be in a Header frame
+pub struct HeaderData<'obj> {
+    pub padding: Option<u8>,
+    pub priority_data: Option<(bool, u32, u8)>, // exclusive, stream dep, weight
+    pub header_block_fragment: &'obj [u8],
+}
+
 /// A Map for buffers that contains frames of type HEADERS
 create_frame_type!{
     HeadersFrame {
@@ -137,34 +144,50 @@ create_frame_type!{
     // Each of these functions first determines the memory layout then
     // and then pulls the correct info
 
-    pub fn get_pad_length(&'obj self) -> Option<u8> {
+    pub fn get_header_data(&'obj self) -> HeaderData<'obj> {
+        let buf = &self.payload();
+
         use self::PadPrioState::*;
         match self.pad_prio_flags() {
-            PaddedOnly | Both => Some(self.payload()[0]),
-            _                 => None,
-        }
-    }
 
-    pub fn get_priority_info(&'obj self) -> Option<(bool, u32, u8)> {
-        use self::PadPrioState::*;
-        let buf = match self.pad_prio_flags() {
-            PriorityOnly => &self.payload()[0..5],
-            Both         => &self.payload()[1..6],
-            _            => return None,
-        };
-        let stream_dep = unsafe { getu32_from_be(&buf[0..4]) };
-        let exclusive = stream_dep & 0x80000000 != 0;
-        let weight = buf[4];
-        Some((exclusive, stream_dep & 0x7FFFFFFF, weight))
-    }
+            Neither      =>
+                HeaderData {
+                    padding: None,
+                    priority_data: None,
+                    header_block_fragment: &buf[0..],
+                },
 
-    pub fn get_header_block_fragment(&'obj self) -> &[u8] {
-        use self::PadPrioState::*;
-        match self.pad_prio_flags() {
-            Neither      => &self.payload()[0..],
-            PaddedOnly   => &self.payload()[1..],
-            PriorityOnly => &self.payload()[5..],
-            Both         => &self.payload()[6..],
+            PaddedOnly   =>
+                HeaderData {
+                    padding: Some(buf[0]),
+                    priority_data: None,
+                    header_block_fragment: &buf[1..],
+                },
+
+            PriorityOnly => {
+                let stream_dep = unsafe { getu32_from_be(&buf[0..4]) };
+                let exclusive = stream_dep & 0x80000000 != 0;
+                let weight = buf[4];
+
+                HeaderData {
+                    padding: None,
+                    priority_data: Some((exclusive, stream_dep & 0x7FFFFFFF, weight)),
+                    header_block_fragment: &buf[5..],
+                }
+            },
+
+            Both         => {
+                let stream_dep = unsafe { getu32_from_be(&buf[1..5]) };
+                let exclusive = stream_dep & 0x80000000 != 0;
+                let weight = buf[5];
+
+                HeaderData {
+                    padding: Some(buf[0]),
+                    priority_data: Some((exclusive, stream_dep & 0x7FFFFFFF, weight)),
+                    header_block_fragment: &buf[6..],
+                }
+            },
+
         }
     }
 } }
@@ -437,12 +460,11 @@ mod frame_type_tests {
 
         let headers : HeadersFrame = GenericFrame::point_to(&mut buf).into();
 
-        assert_eq!(None, headers.get_pad_length());
+        let h_data = headers.get_header_data();
 
-        let data = headers.get_priority_info();
-        assert_eq!(data, None);
-
-        assert_eq!(headers.get_header_block_fragment()[..], bc[9..]);
+        assert_eq!(None, h_data.padding);
+        assert_eq!(None, h_data.priority_data);
+        assert_eq!(h_data.header_block_fragment[..], bc[9..]);
 
         //================================
         // PaddedOnly
@@ -453,12 +475,11 @@ mod frame_type_tests {
 
         let headers : HeadersFrame = GenericFrame::point_to(&mut buf).into();
 
-        assert_eq!(Some(15), headers.get_pad_length());
+        let h_data = headers.get_header_data();
 
-        let data = headers.get_priority_info();
-        assert_eq!(data, None);
-
-        assert_eq!(headers.get_header_block_fragment()[..], bc[10..]);
+        assert_eq!(Some(15), h_data.padding);
+        assert_eq!(None, h_data.priority_data);
+        assert_eq!(h_data.header_block_fragment[..], bc[10..]);
 
         //================================
         // PriorityOnly
@@ -469,14 +490,11 @@ mod frame_type_tests {
 
         let headers : HeadersFrame = GenericFrame::point_to(&mut buf).into();
 
-        assert_eq!(None, headers.get_pad_length());
+        let h_data = headers.get_header_data();
 
-        let (exclusive, dep, weight) = headers.get_priority_info().unwrap();
-        assert_eq!(exclusive, true);
-        assert_eq!(dep, 31);
-        assert_eq!(weight, 255);
-
-        assert_eq!(headers.get_header_block_fragment()[..], bc[14..]);
+        assert_eq!(None, h_data.padding);
+        assert_eq!(Some((true, 31, 255)), h_data.priority_data);
+        assert_eq!(h_data.header_block_fragment[..], bc[14..]);
 
         //================================
         // Both
@@ -487,14 +505,11 @@ mod frame_type_tests {
 
         let headers : HeadersFrame = GenericFrame::point_to(&mut buf).into();
 
-        assert_eq!(Some(15), headers.get_pad_length());
+        let h_data = headers.get_header_data();
 
-        let (exclusive, dep, weight) = headers.get_priority_info().unwrap();
-        assert_eq!(exclusive, true);
-        assert_eq!(dep, 31);
-        assert_eq!(weight, 255);
-
-        assert_eq!(headers.get_header_block_fragment()[..], bc[15..]);
+        assert_eq!(Some(15), h_data.padding);
+        assert_eq!(Some((true, 31, 255)), h_data.priority_data);
+        assert_eq!(h_data.header_block_fragment[..], bc[15..]);
     }
 
     #[test]
