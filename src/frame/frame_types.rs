@@ -29,7 +29,9 @@ macro_rules! impl_debug_print {
     }
 }
 
-macro_rules! impl_frame_type {
+impl_debug_print!( GenericFrame );
+
+macro_rules! impl_into_type {
     ( $typename:ident ) => {
         impl<'a> Into<$typename<'a>> for GenericFrame<'a> {
             fn into(mut self) -> $typename<'a> {
@@ -39,20 +41,21 @@ macro_rules! impl_frame_type {
     }
 }
 
-macro_rules! impl_buf_frame {
-    ( $($typename:ident),+ ) => {
-        $(
-            impl_buf!( u8 : buf => $typename; );
-            impl<'obj, 'buf> Http2Frame<'obj, 'buf> for $typename<'buf> where 'buf: 'obj {}
-            impl_frame_type!( $typename );
-            impl_debug_print!( $typename );
-        )*
+macro_rules! create_frame_type {
+    { $name:ident $code:tt } => {
+        impl_buf!( u8 : buf => $name; );
+        impl<'obj, 'buf> Http2Frame<'obj, 'buf> for $name<'buf> where 'buf: 'obj {}
+        impl_into_type!( $name );
+        impl_debug_print!( $name );
+
+        pub struct $name<'buf> {
+            buf: &'buf mut [u8],
+        }
+
+        impl<'obj, 'buf> $name<'buf> where $name<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj
+            $code
     }
 }
-
-impl_debug_print!( GenericFrame );
-
-impl_buf_frame!( HeadersFrame, DataFrame, PriorityFrame, RstStreamFrame, SettingsFrame, PushPromiseFrame, PingFrame, GoAwayFrame, WindowUpdateFrame, ContinuationFrame );
 
 // ================================================
 // the major header types are defined as follows
@@ -108,11 +111,8 @@ enum PadPrioState {
 }
 
 /// A Map for buffers that contains frames of type HEADERS
-pub struct HeadersFrame<'buf> {
-    buf: &'buf mut [u8],
-}
-
-impl<'obj, 'buf> HeadersFrame<'buf> where HeadersFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+create_frame_type!{
+    HeadersFrame {
 
     // private utility functions
     // =============================
@@ -167,7 +167,7 @@ impl<'obj, 'buf> HeadersFrame<'buf> where HeadersFrame<'buf>: Http2Frame<'obj, '
             Both         => &self.payload()[6..],
         }
     }
-}
+} }
 
 /// ===============================
 /// DATA
@@ -184,11 +184,8 @@ impl<'obj, 'buf> HeadersFrame<'buf> where HeadersFrame<'buf>: Http2Frame<'obj, '
 /// Figure 6: DATA Frame Payload
 ///
 
-pub struct DataFrame<'buf> {
-    buf: &'buf mut [u8],
-}
-
-impl<'obj, 'buf> DataFrame<'buf> where DataFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+create_frame_type!{
+    DataFrame {
 
     fn padded(&'obj self) -> bool {
         self.get_flags() & PADDED != 0
@@ -204,7 +201,7 @@ impl<'obj, 'buf> DataFrame<'buf> where DataFrame<'buf>: Http2Frame<'obj, 'buf>, 
         }
     }
 
-}
+} }
 
 /// ===============================
 /// PRIORITY
@@ -218,11 +215,8 @@ impl<'obj, 'buf> DataFrame<'buf> where DataFrame<'buf>: Http2Frame<'obj, 'buf>, 
 ///  +-+-------------+
 /// Figure 8: PRIORITY Frame Payload
 
-pub struct PriorityFrame<'buf> {
-    buf: &'buf mut [u8],
-}
-
-impl<'obj, 'buf> PriorityFrame<'buf> where PriorityFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+create_frame_type! {
+    PriorityFrame {
 
     pub fn get_priority_info(&'obj self) -> (bool, u32, u8) {
         let buf = &self.payload()[..];
@@ -231,7 +225,7 @@ impl<'obj, 'buf> PriorityFrame<'buf> where PriorityFrame<'buf>: Http2Frame<'obj,
         let weight = buf[4];
         (exclusive, stream_dep & 0x7FFFFFFF, weight)
     }
-}
+} }
 
 /// ===============================
 /// RST_STREAM
@@ -243,17 +237,14 @@ impl<'obj, 'buf> PriorityFrame<'buf> where PriorityFrame<'buf>: Http2Frame<'obj,
 ///  +---------------------------------------------------------------+
 /// Figure 9: RST_STREAM Frame Payload
 
-pub struct RstStreamFrame<'buf> {
-    buf: &'buf mut [u8],
-}
-
-impl<'obj, 'buf> RstStreamFrame<'buf> where RstStreamFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+create_frame_type! {
+    RstStreamFrame {
 
     pub fn get_error_code(&'obj self) -> u32 {
         let buf = &self.payload()[..];
         unsafe { getu32_from_be(&buf[0..4]) }
     }
-}
+} }
 
 /// ===============================
 /// SETTINGS
@@ -292,11 +283,8 @@ impl<'obj> Iterator for Settings<'obj> {
     }
 }
 
-pub struct SettingsFrame<'buf> {
-    buf: &'buf mut [u8],
-}
-
-impl<'obj, 'buf> SettingsFrame<'buf> where SettingsFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+create_frame_type! {
+    SettingsFrame {
 
     // return an array filled with the setting parameters from the frame
     pub fn get_settings_paramaters(&'obj self) -> Settings {
@@ -305,7 +293,7 @@ impl<'obj, 'buf> SettingsFrame<'buf> where SettingsFrame<'buf>: Http2Frame<'obj,
         // actually just note here that a lot more error checking should be done
         Settings { s_buf: &self.payload()[..] }
     }
-}
+} }
 
 /// ===============================
 /// PUSH_PROMISE
@@ -323,11 +311,8 @@ impl<'obj, 'buf> SettingsFrame<'buf> where SettingsFrame<'buf>: Http2Frame<'obj,
 ///  +---------------------------------------------------------------+
 /// Figure 11: PUSH_PROMISE Payload Format
 
-pub struct PushPromiseFrame<'buf> {
-    buf: &'buf mut [u8],
-}
-
-impl<'obj, 'buf> PushPromiseFrame<'buf> where PushPromiseFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+create_frame_type! {
+    PushPromiseFrame {
 
     fn padded(&'obj self) -> bool {
         self.get_flags() & PADDED != 0
@@ -347,7 +332,7 @@ impl<'obj, 'buf> PushPromiseFrame<'buf> where PushPromiseFrame<'buf>: Http2Frame
         let end = buf.len() - padding as usize;
         (id & 0x7FFFFFFF, &buf[4..end])
     }
-}
+} }
 
 /// ===============================
 /// PING
@@ -361,11 +346,8 @@ impl<'obj, 'buf> PushPromiseFrame<'buf> where PushPromiseFrame<'buf>: Http2Frame
 ///  +---------------------------------------------------------------+
 /// Figure 12: PING Payload Format
 
-pub struct PingFrame<'buf> {
-    buf: &'buf mut [u8],
-}
-
-impl<'obj, 'buf> PingFrame<'buf> where PingFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+create_frame_type! {
+    PingFrame {
 
     // returns reg to that data - equivelent to the payload function but checks for valid size
     pub fn get_ping_data(&'obj self) -> &'obj [u8] {
@@ -373,7 +355,7 @@ impl<'obj, 'buf> PingFrame<'buf> where PingFrame<'buf>: Http2Frame<'obj, 'buf>, 
         debug_assert_eq!(buf.len(), 8);
         buf
     }
-}
+} }
 
 /// ===============================
 /// GOAWAY
@@ -389,11 +371,8 @@ impl<'obj, 'buf> PingFrame<'buf> where PingFrame<'buf>: Http2Frame<'obj, 'buf>, 
 ///  +---------------------------------------------------------------+
 /// Figure 13: GOAWAY Payload Format
 
-pub struct GoAwayFrame<'buf> {
-    buf: &'buf mut [u8],
-}
-
-impl<'obj, 'buf> GoAwayFrame<'buf> where GoAwayFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+create_frame_type! {
+    GoAwayFrame {
 
     pub fn get_go_away_info(&'obj self) -> (u32, u32, &'obj [u8]) {
         let buf = &self.payload();
@@ -401,7 +380,7 @@ impl<'obj, 'buf> GoAwayFrame<'buf> where GoAwayFrame<'buf>: Http2Frame<'obj, 'bu
         let error_code = unsafe { getu32_from_be(&buf[4..8]) };
         (last_stread_id, error_code, &buf[8..])
     }
-}
+} }
 
 /// ===============================
 /// WINDOW_UPDATE
@@ -413,18 +392,15 @@ impl<'obj, 'buf> GoAwayFrame<'buf> where GoAwayFrame<'buf>: Http2Frame<'obj, 'bu
 ///  +-+-------------------------------------------------------------+
 /// Figure 14: WINDOW_UPDATE Payload Format
 
-pub struct WindowUpdateFrame<'buf> {
-    buf: &'buf mut [u8],
-}
-
-impl<'obj, 'buf> WindowUpdateFrame<'buf> where WindowUpdateFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+create_frame_type! {
+    WindowUpdateFrame {
 
     pub fn get_window_update(&'obj self) -> u32 {
         let buf = &self.payload()[..];
         debug_assert_eq!(buf.len(), 4);
         unsafe { getu32_from_be(buf) }
     }
-}
+} }
 
 /// ===============================
 /// CONTINUATION
@@ -436,16 +412,13 @@ impl<'obj, 'buf> WindowUpdateFrame<'buf> where WindowUpdateFrame<'buf>: Http2Fra
 ///  +---------------------------------------------------------------+
 /// Figure 15: CONTINUATION Frame Payload
 
-pub struct ContinuationFrame<'buf> {
-    buf: &'buf mut [u8],
-}
-
-impl<'obj, 'buf> ContinuationFrame<'buf> where ContinuationFrame<'buf>: Http2Frame<'obj, 'buf>, 'buf: 'obj {
+create_frame_type! {
+    ContinuationFrame {
 
     pub fn get_contuniation(&'obj self) -> &'obj [u8] {
         &self.payload()[..]
     }
-}
+} }
 
 #[cfg(test)]
 mod frame_type_tests {
