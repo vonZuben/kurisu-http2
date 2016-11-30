@@ -341,7 +341,7 @@ impl<'obj, 'buf> PushPromiseFrame<'buf> where PushPromiseFrame<'buf>: Http2Frame
         };
         let id = unsafe { getu32_from_be(&buf[..4]) };
         let end = buf.len() - padding as usize;
-        (id & 0x7FFFFFFF, &self.payload()[4..end])
+        (id & 0x7FFFFFFF, &buf[4..end])
     }
 }
 
