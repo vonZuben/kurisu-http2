@@ -8,7 +8,7 @@ libc = "*"
 lazy_static = "*"
 
 [dependencies.openssl]
-version = "*"
+version = "0.7.10"
 features = ["ecdh_auto", "tlsv1_2", "alpn"]
 
 
