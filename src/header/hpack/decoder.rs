@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use super::table::Table;
 use super::integers;
 use super::huffman::Huffman;
@@ -187,7 +185,7 @@ impl Decoder {
         }
         else { // have name via index
             let value = try!(self.consume_literal(&mut total_consumed, &buf));
-            self.table.add_entry_id(index as usize, value);
+            try!(self.table.add_entry_id(index as usize, value));
         }
 
         // the entry to return will always be the latest added

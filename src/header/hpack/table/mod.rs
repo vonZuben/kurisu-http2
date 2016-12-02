@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use std::rc::Rc;
 
 use header::*;
 
@@ -151,10 +150,8 @@ impl Table {
 #[allow(unused_variables)]
 #[cfg(test)]
 mod dyn_table_tests {
-    use super::Table;
 
-    use std::rc::Rc;
-    use header::HeaderEntry;
+    use super::Table;
 
     #[test]
     fn test_add() {
@@ -176,11 +173,11 @@ mod dyn_table_tests {
         table.add_entry_literal("nm".to_string(), "val".to_string());
         assert_eq!(table.get_header_entry(62).unwrap(), ("nm", "val").into());
 
-        table.add_entry_id(62, "ttt".to_string()); // will evict the first entry but Rc should still be valid
+        table.add_entry_id(62, "ttt".to_string()).unwrap(); // will evict the first entry but Rc should still be valid
         assert_eq!(table.num_dyn_entries(), 1);
         assert_eq!(table.get_header_entry(62).unwrap(), ("nm", "ttt").into());
 
-        table.add_entry_id(62, "XXXX".to_string()); // will evict and not be enough room to add
+        table.add_entry_id(62, "XXXX".to_string()).unwrap(); // will evict and not be enough room to add
         assert_eq!(table.num_dyn_entries(), 0);
         let entry = table.get_header_entry(62).unwrap(); // panic here
     }
@@ -191,7 +188,7 @@ mod dyn_table_tests {
         let mut table = Table::new(200, 10);
 
         table.add_entry_literal("n".to_string(), "v".to_string());
-        table.add_entry_id(62, "z".to_string());
+        table.add_entry_id(62, "z".to_string()).unwrap();
 
         assert_eq!(table.get_header_entry(62).unwrap(), ("n", "z").into());
         assert_eq!(table.get_header_entry(63).unwrap(), ("n", "v").into());

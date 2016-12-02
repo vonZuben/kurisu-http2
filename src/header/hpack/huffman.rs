@@ -15,7 +15,7 @@ pub struct Huffman {
 }
 
 lazy_static! {
-    static ref d_table: HashMap<(u32, u8), u8> = {
+    static ref D_TABLE: HashMap<(u32, u8), u8> = {
         let len = HUFFMAN_TABLE.len();
 
         let mut hash_map = HashMap::with_capacity(len);
@@ -40,7 +40,7 @@ lazy_static! {
 impl Huffman {
     pub fn new() -> Self {
         Huffman {
-            decode_table: &d_table,
+            decode_table: &D_TABLE,
             encode_table: HUFFMAN_TABLE,
         }
     }

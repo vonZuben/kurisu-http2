@@ -140,8 +140,7 @@ impl HeaderList {
 #[cfg(test)]
 mod header_list_tests {
 
-    use std::rc::Rc;
-    use super::{HeaderList, HeaderEntry};
+    use super::HeaderList;
 
     #[test]
     fn test_list_iter() {

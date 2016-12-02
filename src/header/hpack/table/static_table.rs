@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::ops::Index;
 
 use header::*;
@@ -33,7 +32,7 @@ struct StaticInner (Vec<TableEntry>);
 unsafe impl Sync for StaticInner {}
 
 lazy_static! {
-    static ref s_tabel: StaticInner = {
+    static ref S_TABLE: StaticInner = {
         let mut vec = Vec::with_capacity(STATIC_TABLE.len());
         for i in STATIC_TABLE {
             vec.push(TableEntry (i.0.into(), i.1.into()));
@@ -53,7 +52,7 @@ pub struct StaticTable (&'static Vec<TableEntry>);
 
 impl StaticTable {
     pub fn new() -> Self {
-        StaticTable ( &s_tabel.0 )
+        StaticTable ( &S_TABLE.0 )
     }
 }
 

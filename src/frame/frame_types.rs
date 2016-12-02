@@ -589,8 +589,6 @@ mod frame_type_tests {
     fn go_away_frame_tests() {
         let mut buf = vec![0x00, 0x00, 0x0C, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x05, 0x30, 0x33];
 
-        let bc = buf.clone();
-
         let go_away_frame : GoAwayFrame = GenericFrame::point_to(&mut buf).into();
 
         assert_eq!(go_away_frame.get_go_away_info(), (2, 5, &b"03"[..]));
@@ -599,8 +597,6 @@ mod frame_type_tests {
     #[test]
     fn window_update_frame_tests() {
         let mut buf = vec![0x00, 0x00, 0x0C, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x90];
-
-        let bc = buf.clone();
 
         let window_update_frame : WindowUpdateFrame = GenericFrame::point_to(&mut buf).into();
 
