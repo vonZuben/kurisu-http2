@@ -77,7 +77,7 @@ unsafe fn getu32_from_be(buf: &[u8]) -> u32 {
     use std::ptr;
     debug_assert_eq!(buf.len(), 4);
     let mut num : u32 = mem::uninitialized();
-    ptr::copy(buf.as_ptr(), &mut num as *mut u32 as *mut u8, 4);
+    ptr::copy_nonoverlapping(buf.as_ptr(), &mut num as *mut u32 as *mut u8, 4);
     u32::from_be(num)
 }
 
@@ -86,7 +86,7 @@ unsafe fn getu16_from_be(buf: &[u8]) -> u16 {
     use std::ptr;
     debug_assert_eq!(buf.len(), 2);
     let mut num : u16 = mem::uninitialized();
-    ptr::copy(buf.as_ptr(), &mut num as *mut u16 as *mut u8, 2);
+    ptr::copy_nonoverlapping(buf.as_ptr(), &mut num as *mut u16 as *mut u8, 2);
     u16::from_be(num)
 }
 
