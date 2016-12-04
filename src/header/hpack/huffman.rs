@@ -52,6 +52,7 @@ impl Huffman {
         let mut decoded = Vec::with_capacity(decode_size);
 
         drun!{{
+            println!("pre fill capacity: {}", decoded.capacity());
             for b in buf {
                 print!("{:02X}", b);
             }
