@@ -4,6 +4,9 @@ extern crate openssl;
 extern crate lazy_static;
 
 #[macro_use]
+mod krserr;
+
+#[macro_use]
 mod debug;
 
 #[macro_use]
