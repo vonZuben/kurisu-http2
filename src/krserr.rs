@@ -95,6 +95,9 @@ impl<T, E> ErrorChain<T> for ::std::result::Result<T, E> where E: Into<ErrLink> 
         }
 }
 
+/// This macro is for simplifying the creation of errors that can carry a message to write
+/// to a buffer (eg. Log) that may contain dynamic error information and be as efficient as
+/// possible
 macro_rules! make_error {
     ( $name:ident $(< $($a:tt),* ; $($T:tt $(: $L:tt)*),* >)* ; $msg:expr ; $( $param:ident : $val:ty),* ) => {
         #[derive(Debug)]
