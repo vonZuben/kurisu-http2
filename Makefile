@@ -1,7 +1,7 @@
 DEV_TESTER=test
 
 default:
-	cargo build
+	cargo check
 
 devtest:
 	rustc --test -o ${DEV_TESTER} src/main.rs

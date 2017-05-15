@@ -13,5 +13,5 @@ openssl genrsa -out server.key 2048
 openssl req -new -key server.key -out server.csr
 
 # sign our own servers cert, this will be trusted now for browsers that install our rootCA.crt
-openssl x509 -req -in server.csr -CA rootCA.crt -CAkey rootCA.key -CAcreateserial -out server.crt -days 365
+openssl x509 -req -in server.csr -CA rootCA.crt -CAkey rootCA.key -CAcreateserial -out server.crt -days 365 -extfile v3.ext
 
