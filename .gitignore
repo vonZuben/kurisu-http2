@@ -11,3 +11,5 @@ rootCA.key
 rootCA.crt
 rootCA.srl
 rootCA.csr
+
+launch.json
