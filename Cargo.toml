@@ -7,9 +7,9 @@ authors = ["Chris von Zuben <chris.vonzuben@gmail.com>"]
 libc = "*"
 lazy_static = "*"
 
-[dependencies.openssl]
-version = "0.7.10"
-features = ["ecdh_auto", "tlsv1_2", "alpn"]
+#[dependencies.openssl]
+#version = "0.7.10"
+#features = ["ecdh_auto", "tlsv1_2", "alpn"]
 
 
 #[profile.dev]
