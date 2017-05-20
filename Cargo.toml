@@ -6,17 +6,18 @@ authors = ["Chris von Zuben <chris.vonzuben@gmail.com>"]
 [dependencies]
 libc = "*"
 lazy_static = "*"
+krs_ssl = { path = "krs_ssl" }
 
 #[dependencies.openssl]
 #version = "0.7.10"
 #features = ["ecdh_auto", "tlsv1_2", "alpn"]
 
 
-#[profile.dev]
-#opt-level = 0
-#debug = true
+[profile.dev]
+opt-level = 0
+debug = true
 #rpath = false
-#lto = false
+lto = false
 #debug-assertions = true
 #codegen-units = 1
 #panic = 'unwind'
