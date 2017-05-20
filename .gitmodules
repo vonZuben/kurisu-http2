@@ -1,0 +1,3 @@
+[submodule "krs_ssl"]
+	path = krs_ssl
+	url = https://github.com/vonZuben/krs_ssl.git
