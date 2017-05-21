@@ -122,8 +122,8 @@ fn main() {
     // accept connections and process them, spawning a new thread for each one
     for stream in listener.incoming() {
         match stream {
-            Ok(mut stream) => {
-                if let Ok(mut ssl_stream) = OsslStream::accept(&ctx, stream) {
+            Ok(stream) => {
+                if let Ok(ssl_stream) = OsslStream::accept(&ctx, stream) {
                     thread::spawn(move|| {
 
                         handle_client(ssl_stream);

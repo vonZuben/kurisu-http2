@@ -1,17 +1,22 @@
 DEV_TESTER=test
 
+CARGO_ENV=CARGO_INCREMENTAL=1
+
 default:
-	cargo check
+	$(CARGO_ENV) cargo check
+
+build:
+	$(CARGO_ENV) cargo build
 
 devtest:
 	rustc --test -o ${DEV_TESTER} src/main.rs
 	./${DEV_TESTER} --nocapture
 
 pretty:
-	cargo rustc -- -Z unstable-options --pretty=expanded
+	$(CARGO_ENV) cargo rustc -- -Z unstable-options --pretty=expanded
 
 bt:
-	RUST_BACKTRACE=1 cargo test
+	$(CARGO_ENV) RUST_BACKTRACE=1 cargo test
 
 run:
-	cargo test
+	$(CARGO_ENV) cargo test
