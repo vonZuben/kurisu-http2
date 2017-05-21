@@ -6,7 +6,10 @@ default:
 	$(CARGO_ENV) cargo check
 
 build:
-	$(CARGO_ENV) cargo build
+	$(CARGO_ENV) cargo build --verbose
+
+release:
+	rustup run stable cargo build --release
 
 devtest:
 	rustc --test -o ${DEV_TESTER} src/main.rs
