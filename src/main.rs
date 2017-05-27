@@ -9,6 +9,8 @@ mod krserr;
 #[macro_use]
 mod debug;
 
+mod bytes;
+
 #[macro_use]
 mod buf;
 use buf::Buf;
