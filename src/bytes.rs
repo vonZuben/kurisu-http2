@@ -54,9 +54,6 @@ impl<'buf> Iterator for Bytes<'buf> {
     }
 }
 
-fn main() {
-}
-
 #[cfg(test)]
 mod bytes_test {
 
@@ -95,8 +92,8 @@ mod bytes_test {
         let mut read_to1 = [0;5];
         let mut read_to2 = [0;5];
 
-        b1.read(&mut read_to1);
-        b1.read(&mut read_to2);
+        b1.read(&mut read_to1).unwrap();
+        b1.read(&mut read_to2).unwrap();
 
         assert_eq!(&t1, &read_to1);
         assert_eq!(&t2, &read_to2);
@@ -106,7 +103,7 @@ mod bytes_test {
     fn write_test() {
         use std::io::Write;
 
-        let mut buf = [123u8, 15, 51, 75, 93, 20, 13, 13, 45, 12];
+        let buf = [123u8, 15, 51, 75, 93, 20, 13, 13, 45, 12];
 
         let mut t1 = Vec::new();
         let mut t2 = Vec::new();
@@ -121,9 +118,9 @@ mod bytes_test {
         {
             let mut w1 = Bytes::new(&mut write_to);
 
-            w1.write(&t1);
-            w1.write(&t2);
-            w1.write(&t3);
+            w1.write(&t1).unwrap();
+            w1.write(&t2).unwrap();
+            w1.write(&t3).unwrap();
         }
 
         assert_eq!(&buf, &write_to);
