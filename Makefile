@@ -1,4 +1,3 @@
-DEV_TESTER=test
 
 CARGO_ENV=CARGO_INCREMENTAL=1
 
@@ -11,9 +10,9 @@ build:
 release:
 	rustup run stable cargo build --release
 
-devtest:
-	rustc --test -o ${DEV_TESTER} src/main.rs
-	./${DEV_TESTER} --nocapture
+nocaptest:
+	cargo rustc --verbose -- --test -o test
+	#./ --nocapture
 
 pretty:
 	$(CARGO_ENV) cargo rustc -- -Z unstable-options --pretty=expanded
