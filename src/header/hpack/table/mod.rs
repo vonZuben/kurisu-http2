@@ -68,7 +68,8 @@ impl Table {
     // useful when adding literals to the table that are going to
     // be used straight away in a header list
     pub fn get_dyn_front(&self) -> HeaderEntry {
-        debug_assert!(self.num_dyn_entries() > 0);
+        let t = self.num_dyn_entries();
+        debug_assert!(t > 0);
         let entry = &self.dyn_table[0];
         entry.clone().into()
     }

@@ -1,40 +1,46 @@
-use std::iter::Iterator;
+use borrow_iter::{BPeekable, BorrowPeekable};
 
 /// Iterates over the bits of a buffer
-pub struct BitItor<'a> {
-    buf: &'a [u8],
-    index: usize,
+pub struct BitItor<'a, I: Iterator + 'a> {
+    buf: BPeekable<'a, I>,
     bit: u8,
 }
 
-impl<'a> BitItor<'a> {
-    pub fn new(buf: &'a [u8]) -> Self {
+// NOTE TO SELF -- this works if i just take mut ref to an already iterator
+impl<'a, 'b, I> BitItor<'a, I>
+    where 'b: 'a, I: Iterator<Item=&'b u8> {
+
+    pub fn new(buf: &'a mut I) -> Self {
         BitItor {
-            buf: buf,
-            index: 0,
+            buf: buf.borrow_peekable(),
             bit: 0,
         }
     }
 }
 
-impl<'a> Iterator for BitItor<'a> {
+impl<'a, 'b, I> Iterator for BitItor<'a, I>
+    where 'b: 'a, I: Iterator<Item=&'b u8> {
     type Item = bool;
+
     fn next(&mut self) -> Option<Self::Item> {
         // is this the end of the buffer
-        if self.index == self.buf.len() {
+        if self.buf.bpeek().is_none() {
             return None;
         }
 
         // get is_set
-        let byte = self.buf[self.index];
-        let mask = 0x80 >> self.bit;
-        let is_set: bool = byte & mask > 0;
+        let is_set: bool;
+        {
+            let byte = self.buf.bpeek().unwrap();
+            let mask = 0x80 >> self.bit;
+            is_set = *byte & mask > 0;
+        }
 
         // iterate
         self.bit += 1;
         if self.bit > 7 {
             self.bit = 0;
-            self.index += 1;
+            self.buf.next();
         }
 
         Some(is_set)
@@ -51,11 +57,15 @@ mod bit_iter_tests {
         // reconstructing it with the iterator results
         let buf = [0xf3, 0x21, 0x75, 0x21];
         println!("{:?}", buf);
-        let bi = BitItor::new(&buf);
+
+        let mut biter = buf.iter();
+
+        let mut bi = BitItor::new(&mut biter);
 
         let mut tbuf = [0u8; 4];
         let mut index = 0;
         let mut bit = 0;
+
         for b in bi {
             println!("{:?}", b);
             tbuf[index] <<= 1;
@@ -73,5 +83,6 @@ mod bit_iter_tests {
         }
 
         assert_eq!(buf, tbuf);
+
     }
 }

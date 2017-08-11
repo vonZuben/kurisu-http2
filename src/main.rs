@@ -11,6 +11,8 @@ mod debug;
 
 mod bytes;
 
+mod borrow_iter;
+
 #[macro_use]
 mod buf;
 use buf::Buf;

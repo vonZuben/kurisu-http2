@@ -45,21 +45,27 @@ impl Huffman {
         }
     }
 
-    pub fn decode(&self, buf: &[u8]) -> Vec<u8> {
+    pub fn decode<'a, 'b, B: IntoIterator<Item=&'b u8>>(&self, buf: B) -> Vec<u8>
+        where <B as ::std::iter::IntoIterator>::IntoIter: 'a {
         // create vec with enough space for most of the decoded buf
         // some reallocation will probably happen with current implementation
-        let decode_size: usize = f32::ceil(buf.len() as f32 * 1.5) as usize;
+
+        let mut bts = buf.into_iter();
+
+        //let bts: &mut B::IntoIter = &mut itr;
+
+        let decode_size: usize = f32::ceil(bts.size_hint().0 as f32 * 1.5) as usize;
         let mut decoded = Vec::with_capacity(decode_size);
 
-        drun!{{
-            println!("pre fill capacity: {}", decoded.capacity());
-            for b in buf {
-                print!("{:02X}", b);
-            }
-            println!("");
-        }}
+        // drun!{{
+        //     println!("pre fill capacity: {}", decoded.capacity());
+        //     for b in buf {
+        //         print!("{:02X}", b);
+        //     }
+        //     println!("");
+        // }}
 
-        let bits = BitItor::new(buf);
+        let bits = BitItor::new(&mut bts);
 
         // the encoded bits
         let mut code = 0u32;

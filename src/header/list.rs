@@ -79,7 +79,7 @@ impl HeaderEntry {
 // turn a tuple into a HeaderEntry from a &str
 // to make testing easier
 // Formate (name, value)
-impl<A, B>  From<(A, B)> for HeaderEntry
+impl<A, B> From<(A, B)> for HeaderEntry
     where A: Into<EntryInner>, B: Into<EntryInner> {
 
     fn from(obj: (A, B)) -> HeaderEntry {

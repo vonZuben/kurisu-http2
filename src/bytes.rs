@@ -2,14 +2,26 @@ use std::io;
 use std::io::{Read, Write};
 
 pub struct Bytes<'buf> {
-    buf: &'buf mut [u8],
+    buf: &'buf [u8],
     pos: usize,
 }
 
 impl<'buf> Bytes<'buf> {
 
+    pub fn new(buf: &'buf [u8]) -> Self {
+        Self { buf, pos: 0 }
+    }
+}
+
+pub struct BytesMut<'buf> {
+    buf: &'buf mut [u8],
+    pos: usize,
+}
+
+impl<'buf> BytesMut<'buf> {
+
     pub fn new(buf: &'buf mut [u8]) -> Self {
-        Bytes { buf, pos: 0 }
+        Self { buf, pos: 0 }
     }
 }
 
@@ -24,7 +36,7 @@ impl<'buf> Read for Bytes<'buf> {
     }
 }
 
-impl<'buf> Write for Bytes<'buf> {
+impl<'buf> Write for BytesMut<'buf> {
 
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         use std::cmp;
@@ -54,11 +66,50 @@ impl<'buf> Iterator for Bytes<'buf> {
     }
 }
 
+impl<'buf> Iterator for BytesMut<'buf> {
+    type Item = &'buf mut u8;
+
+    fn next(&mut self) -> Option<&'buf mut u8> {
+        if self.buf.len() > self.pos {
+            let ret;
+            unsafe {
+                let tmp = self.buf.get_mut(self.pos).unwrap() as *mut u8;
+                ret = tmp.as_mut().unwrap();
+            }
+            self.pos += 1;
+            Some(ret)
+        }
+        else {
+            None
+        }
+    }
+}
+
+impl<'buf> From<&'buf [u8]> for Bytes<'buf> {
+
+    fn from(o: &'buf [u8]) -> Self {
+        Bytes::new(o)
+    }
+}
+
+impl<'buf> From<&'buf mut [u8]> for BytesMut<'buf> {
+
+    fn from(o: &'buf mut [u8]) -> Self {
+        BytesMut::new(o)
+    }
+}
+
+// impl<'buf> std::iter::Peekable for Bytes<'buf> {
+//     type Item = u8;
+
+// //    fn peek(&self) ->
+// }
+
 #[cfg(test)]
 mod bytes_test {
 
-    use super::Bytes;
- 
+    use super::{Bytes, BytesMut};
+
      #[test]
     fn bytes_iterate() {
         let mut buf = [0u8, 1,2,3,4,5,6,7,8,9];
@@ -116,7 +167,7 @@ mod bytes_test {
         let mut write_to = [0;10];
 
         {
-            let mut w1 = Bytes::new(&mut write_to);
+            let mut w1 = BytesMut::new(&mut write_to);
 
             w1.write(&t1).unwrap();
             w1.write(&t2).unwrap();

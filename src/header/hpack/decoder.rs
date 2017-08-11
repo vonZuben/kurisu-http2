@@ -2,11 +2,11 @@ use super::table::Table;
 use super::integers;
 use super::huffman::Huffman;
 
-use header::*;
+use std::iter::Peekable;
 
-// private type for representing the result of decoding an entry
-// ( number of bytes used, HeaderEntry )
-type DecEntry = Result<(HeaderEntry, usize), &'static str>;
+use borrow_iter::BorrowTake;
+
+use header::*;
 
 pub struct Decoder {
     table: Table,
@@ -31,8 +31,8 @@ impl Decoder {
     /// Needs the dynamic table to be managed by the connection
     /// because it is a stateful list used for the entire connection
     pub fn get_header_list(&mut self, hpack_block: &[u8]) -> Result<HeaderList, &'static str> {
-        let hpack_block_len = hpack_block.len();
-        let mut stride = 0;
+
+        let mut bts = hpack_block.iter().peekable();
 
         // just assuming 10 entries is enough for now
         let mut header_list = HeaderList::with_capacity(10);
@@ -42,30 +42,20 @@ impl Decoder {
         //
         // hpack_block points to the first encoded entry, after each entry is decoded
         // must find out how much of the buffer has been consumed
-        while stride < hpack_block_len {
-            let entry: (HeaderEntry, usize); // DecEntry Ok Result
-            if      hpack_block[stride] & 0x80 == 0x80 { // Indexed Field Representation
-                entry = try!(self.indexed_header(&hpack_block[stride..]));
+
+        while bts.peek().is_some() {
+            //let val = *bts.peek().unwrap();
+            let entry;
+
+            match *bts.peek().unwrap() {
+                val if val & 0x80 == 0x80 => entry = try!(self.indexed_header(&mut bts)),
+                val if val & 0xC0 == 0x40 => entry = try!(self.literal_header(&mut bts)),
+                val if val & 0xF0 == 0x00 => entry = try!(self.literal_header_unindexed(&mut bts)),
+                val if val & 0xF0 == 0x10 => entry = try!(self.literal_header_never_indexed(&mut bts)),
+                val if val & 0xE0 == 0x20 =>       { try!(self.size_update(&mut bts)); continue; },
+                _ => return Err("Unrecognized block type"),
             }
-            else if hpack_block[stride] & 0xC0 == 0x40 { // Literal Field Representation
-                entry = try!(self.literal_header(&hpack_block[stride..]));
-            }
-            else if hpack_block[stride] & 0xF0 == 0x00 { // Without Indexing
-                entry = try!(self.literal_header_unindexed(&hpack_block[stride..]));
-            }
-            else if hpack_block[stride] & 0xF0 == 0x10 { // Never Indexed
-                entry = try!(self.literal_header_never_indexed(&hpack_block[stride..]));
-            }
-            else if hpack_block[stride] & 0xE0 == 0x20 { // Max Size Update
-                let consumed = try!(self.size_update(&hpack_block[stride..]));
-                stride += consumed;
-                continue;
-            }
-            else {
-                return Err("Unrecognized block type");
-            }
-            header_list.add_entry(entry.0);
-            stride += entry.1; // move over the consumed bytes
+            header_list.add_entry(entry);
         }
 
         Ok(header_list)
@@ -73,23 +63,18 @@ impl Decoder {
 
 
     // be carful using this funciton as it is stateful, call it in the correct order
-    fn consume_literal(&self, total_consumed: &mut usize, buf: &[u8]) -> Result<String, &'static str>{
+    fn consume_literal<'a, I: Iterator<Item=&'a u8>>(&self, bts: &mut Peekable<I>) -> Result<String, &'static str> {
         // get value length and huffman status
-        let is_huffman = buf[*total_consumed] & 0x80 == 0x80;
-        let (length, consumed) = try!(integers::decode_integer(&buf[*total_consumed..], 7));
-
-        *total_consumed += consumed as usize;
+        let is_huffman = *bts.peek().unwrap() & 0x80 == 0x80;
+        let length = try!(integers::decode_integer(bts, 7)) as usize;
 
         let value;
-        let range = *total_consumed + length as usize;
         if is_huffman {
-            value = self.huffman.decode(&buf[*total_consumed..range]);
+            value = self.huffman.decode(bts.borrow_take(length));
         }
         else {
-            value = buf[*total_consumed..range].to_vec();
+            value = bts.borrow_take(length).map(|x|*x).collect();
         }
-
-        *total_consumed += length as usize;
 
         unsafe { Ok(String::from_utf8_unchecked(value)) }
     }
@@ -115,10 +100,10 @@ impl Decoder {
     /// The index value of 0 is not used. It MUST be treated as a decoding error if found in an indexed header field representation.
     ///
 
-    fn indexed_header(&self, buf: &[u8]) -> DecEntry {
-        let (index, consumed) = try!(integers::decode_integer(&buf, 7));
+    fn indexed_header<'a, I: Iterator<Item=&'a u8>>(&self, bts: &mut I) -> Result<HeaderEntry, &'static str> {
+        let index = try!(integers::decode_integer(bts, 7));
         let entry = try!(self.table.get_header_entry(index as usize));
-        Ok((entry, consumed as usize))
+        Ok(entry)
     }
 
     /// 6.2 Literal Header Field Representation
@@ -172,26 +157,24 @@ impl Decoder {
     /// represented as a string literal (see Section 5.2).
     ///
 
-    fn literal_header(&mut self, buf: &[u8]) -> DecEntry {
-        let mut total_consumed = 0usize;
+    fn literal_header<'a, I: Iterator<Item=&'a u8>>(&mut self, bts: &mut Peekable<I>) -> Result<HeaderEntry, &'static str> {
 
-        let (index, consumed) = try!(integers::decode_integer(&buf, 6));
-        total_consumed += consumed as usize;
+        let index = try!(integers::decode_integer(bts, 6));
 
         if index == 0 { // must get name and value from literal
-            let name = try!(self.consume_literal(&mut total_consumed, &buf));
-            let value = try!(self.consume_literal(&mut total_consumed, &buf));
+            let name = try!(self.consume_literal(bts));
+            let value = try!(self.consume_literal(bts));
             self.table.add_entry_literal(name, value);
         }
         else { // have name via index
-            let value = try!(self.consume_literal(&mut total_consumed, &buf));
+            let value = try!(self.consume_literal(bts));
             try!(self.table.add_entry_id(index as usize, value));
         }
 
         // the entry to return will always be the latest added
         // entry in the dynamic table for this case
         let header_entry = self.table.get_dyn_front();
-        Ok((header_entry, total_consumed))
+        Ok(header_entry)
     }
 
     ///
@@ -237,11 +220,11 @@ impl Decoder {
     /// Either form of header field name representation is followed by the header field value
     /// represented as a string literal (see Section 5.2).
 
-    fn literal_header_unindexed(&self, buf: &[u8]) -> DecEntry {
+    fn literal_header_unindexed<'a, I: Iterator<Item=&'a u8>>(&self, bts: &mut Peekable<I>) -> Result<HeaderEntry, &'static str> {
         // this function is more useful for intermediaries which
         // this library does not care about at the moment
         // so it will be treated the same as never indexed
-        self.literal_header_never_indexed(buf)
+        self.literal_header_never_indexed(bts)
     }
 
     ///
@@ -287,25 +270,23 @@ impl Decoder {
     ///
     /// The encoding of the representation is identical to the literal header field without indexing (see Section 6.2.2).
 
-    fn literal_header_never_indexed(&self, buf: &[u8]) -> DecEntry {
-        let mut total_consumed = 0usize;
+    fn literal_header_never_indexed<'a, I: Iterator<Item=&'a u8>>(&self, bts: &mut Peekable<I>) -> Result<HeaderEntry, &'static str> {
 
-        let (index, consumed) = try!(integers::decode_integer(&buf, 4));
-        total_consumed += consumed as usize;
+        let index = try!(integers::decode_integer(bts, 4));
 
         let header_entry: HeaderEntry;
         if index == 0 { // must get name and value from literal
-            let name = try!(self.consume_literal(&mut total_consumed, &buf));
-            let value = try!(self.consume_literal(&mut total_consumed, &buf));
+            let name = try!(self.consume_literal(bts));
+            let value = try!(self.consume_literal(bts));
             header_entry = HeaderEntry::new(name, value);
         }
         else { // have name via index
             let name_rc = try!(self.table.get_name_rc(index as usize));
-            let value = try!(self.consume_literal(&mut total_consumed, &buf));
+            let value = try!(self.consume_literal(bts));
             header_entry = HeaderEntry::new(name_rc, value);
         }
 
-        Ok((header_entry, total_consumed))
+        Ok(header_entry)
     }
 
     ///
@@ -328,10 +309,10 @@ impl Decoder {
     ///
     /// Reducing the maximum size of the dynamic table can cause entries to be evicted (see Section 4.3).
 
-    fn size_update(&mut self, buf: &[u8]) -> Result<usize, &'static str> {
-        let (size, consumed) = try!(integers::decode_integer(&buf, 5));
+    fn size_update<'a, I: Iterator<Item=&'a u8>>(&mut self, bts: &mut I) -> Result<(), &'static str> {
+        let size = try!(integers::decode_integer(bts, 5));
         self.table.max_size_update(size as usize);
-        Ok(consumed as usize)
+        Ok(())
     }
 }
 
@@ -339,7 +320,6 @@ impl Decoder {
 mod decoder_tests {
 
     use super::Decoder;
-    //use header::HeaderList;
 
     #[test]
     fn tmp_decoder_test() {
@@ -355,5 +335,28 @@ mod decoder_tests {
         assert_eq!(list.get_value_by_name(":path"), Some("/"));
         assert_eq!(list.get_value_by_name(":status"), Some("500"));
         assert_eq!(list.get_value_by_name("accept-charset"), Some("1"));
+    }
+
+    #[test]
+    fn comp_decoder_test() {
+        let mut decoder = Decoder::new(4096, 10);
+
+        let list = decoder.get_header_list(&[
+            0x82, 0x41, 0x8A, 0xA0, 0xE4, 0x1D, 0x13, 0x9D, 0x09, 0xB8, 0xF0, 0x1E, 0x07, 0x87, 0x84, 0x40, 0x92, 0xB6, 0xB9, 0xAC, 0x1C, 0x85, 0x58, 0xD5, 0x20, 0xA4, 0xB6, 0xC2, 0xAD, 0x61, 0x7B, 0x5A, 0x54, 0x25, 0x1F, 0x01, 0x31, 0x7A, 0xD1, 0xD0, 0x7F, 0x66, 0xA2, 0x81, 0xB0, 0xDA, 0xE0, 0x53, 0xFA, 0xFC, 0x08, 0x7E, 0xD4, 0xCE, 0x6A, 0xAD, 0xF2, 0xA7, 0x97, 0x9C, 0x89, 0xC6, 0xBF, 0xB5, 0x21, 0xAE, 0xBA, 0x0B, 0xC8, 0xB1, 0xE6, 0x32, 0x58, 0x6D, 0x97, 0x57, 0x65, 0xC5, 0x3F, 0xAC, 0xD8, 0xF7, 0xE8, 0xCF, 0xF4, 0xA5, 0x06, 0xEA, 0x55, 0x31, 0x14, 0x9D, 0x4F, 0xFD, 0xA9, 0x7A, 0x7B, 0x0F, 0x49, 0x58, 0x6D, 0xF5, 0xC0, 0xBB, 0x20, 0x74, 0x2B, 0x84, 0x0D, 0x29, 0xB8, 0x72, 0x8E, 0xC3, 0x30, 0xDB, 0x2E, 0xAE, 0xCB, 0x9F, 0x53, 0xC0, 0x49, 0x7C, 0xA5, 0x89, 0xD3, 0x4D, 0x1F, 0x43, 0xAE, 0xBA, 0x0C, 0x41, 0xA4, 0xC7, 0xA9, 0x8F, 0x33, 0xA6, 0x9A, 0x3F, 0xDF, 0x9A, 0x68, 0xFA, 0x1D, 0x75, 0xD0, 0x62, 0x0D, 0x26, 0x3D, 0x4C, 0x79, 0xA6, 0x8F, 0xBE, 0xD0, 0x01, 0x77, 0xFE, 0x8D, 0x48, 0xE6, 0x2B, 0x1E, 0x0B, 0x1D, 0x7F, 0x46, 0xA4, 0x73, 0x15, 0x81, 0xD7, 0x54, 0xDF, 0x5F, 0x2C, 0x7C, 0xFD, 0xF6, 0x80, 0x0B, 0xBD, 0x50, 0x8D, 0x9B, 0xD9, 0xAB, 0xFA, 0x52, 0x42, 0xCB, 0x40, 0xD2, 0x5F, 0xA5, 0x23, 0xB3, 0x51, 0x8B, 0x2D, 0x4B, 0x70, 0xDD, 0xF4, 0x5A, 0xBE, 0xFB, 0x40, 0x05, 0xDE
+        ]).unwrap();
+
+        for e in list.iter() {
+            println!("{:?}", e);
+        }
+
+        assert_eq!(list.get_value_by_name(":method"), Some("GET"));
+        assert_eq!(list.get_value_by_name(":authority"), Some("localhost:8080"));
+        assert_eq!(list.get_value_by_name(":scheme"), Some("https"));
+        assert_eq!(list.get_value_by_name(":path"), Some("/"));
+        assert_eq!(list.get_value_by_name("upgrade-insecure-requests"), Some("1"));
+        assert_eq!(list.get_value_by_name("user-agent"), Some("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/59.0.3071.104 Safari/537.36"));
+        assert_eq!(list.get_value_by_name("accept"), Some("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8"));
+        assert_eq!(list.get_value_by_name("accept-encoding"), Some("gzip, deflate, br"));
+        assert_eq!(list.get_value_by_name("accept-language"), Some("en-US,en;q=0.8"));
     }
 }

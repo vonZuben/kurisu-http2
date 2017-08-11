@@ -30,49 +30,57 @@
 /// The prefix size, N, is always between 1 and 8 bits. An integer starting at an octet boundary will have an 8-bit prefix.
 ///
 
-pub fn decode_integer(buf: &[u8], prefix_size: u8) -> Result<(u32, u8), &'static str> {
+use bytes::Bytes;
+
+// pub fn decode_integer<'a, B: IntoIterator<Item=&'a u8>>(bts: B, prefix_size: u8) -> Result<u32, &'static str> {
+pub fn decode_integer<'a, 'b, I: Iterator<Item=&'b u8>>(bts: &'a mut I, prefix_size: u8) -> Result<u32, &'static str> {
     use std::num::Wrapping;
 
     if prefix_size < 1 || prefix_size > 8 {
         return Err("hpack integer: invalid prefix");
     }
-    if buf.len() < 1 {
-        return Err("hpack integer: not enough octets (0)");
-    }
+    // if bts.peek().is_none() {
+    //     return Err("hpack integer: not enough octets (0)");
+    // }
 
     // Make sure there's no overflow in the shift operation
     let Wrapping(mask) = if prefix_size == 8 {
-        Wrapping(0xFF)
+        Wrapping(0xFFu8)
     } else {
         Wrapping(1u8 << prefix_size) - Wrapping(1)
     };
-    let mut value = (buf[0] & mask) as u32;
-    if value < (mask as u32) {
+
+    let tv = bts.next();
+
+    if tv.is_none() { return Err("hpack integer: not enough octets (0)"); }
+
+    let mut value = (tv.unwrap() & mask) as u32;
+
+    // if there is only one octet in the encodeing
+    if value < mask as u32 {
         // Value fits in the prefix bits.
-        return Ok((value, 1));
+        return Ok(value);
     }
 
     // The value does not fit into the prefix bits, so we read as many following
     // bytes as necessary to decode the integer.
     // Already one byte used (the prefix)
-    let mut total = 1;
     let mut m = 0;
     // The octet limit is chosen such that the maximum allowed *value* can
     // never overflow an unsigned 32-bit integer. The maximum value of any
     // integer that can be encoded with 5 octets is ~2^28
     let octet_limit = 5;
 
-    for &b in buf[1..].iter() {
-        total += 1;
+    for (i, b) in bts.enumerate() {
         value += ((b & 127) as u32) * (1 << m);
         m += 7;
 
         if b & 128 != 128 {
             // Most significant bit is not set => no more continuation bytes
-            return Ok((value, total));
+            return Ok(value);
         }
 
-        if total == octet_limit {
+        if i == octet_limit {
             // The spec tells us that we MUST treat situations where the
             // encoded representation is too long (in octets) as an error.
             return Err("hpack integer: to many octets");
@@ -127,19 +135,19 @@ mod tests {
     #[test]
     fn decode_test() {
         // simple tst
-        let tst_num = vec![0x41];
-        let num = decode_integer(&tst_num, 8).unwrap();
-        assert_eq!(num, (65, 1));
+        let tst_num = vec![0x41u8];
+        let num = decode_integer(&mut tst_num.iter(), 8).unwrap();
+        assert_eq!(num, 65);
 
         // complex number
         let tst_num = vec![0xFF, 0x05];
-        let num = decode_integer(&tst_num, 8).unwrap();
-        assert_eq!(num, (260, 2));
+        let num = decode_integer(&mut tst_num.iter(), 8).unwrap();
+        assert_eq!(num, 260);
 
         // more complex number
         let tst_num = vec![0x1F, 0x9A, 0x0A];
-        let num = decode_integer(&tst_num, 5).unwrap();
-        assert_eq!(num, (1337, 3));
+        let num = decode_integer(&mut tst_num.iter(), 5).unwrap();
+        assert_eq!(num, 1337);
     }
 
     #[test]
