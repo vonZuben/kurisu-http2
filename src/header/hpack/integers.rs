@@ -30,8 +30,6 @@
 /// The prefix size, N, is always between 1 and 8 bits. An integer starting at an octet boundary will have an 8-bit prefix.
 ///
 
-use bytes::Bytes;
-
 // pub fn decode_integer<'a, B: IntoIterator<Item=&'a u8>>(bts: B, prefix_size: u8) -> Result<u32, &'static str> {
 pub fn decode_integer<'a, 'b, I: Iterator<Item=&'b u8>>(bts: &'a mut I, prefix_size: u8) -> Result<u32, &'static str> {
     use std::num::Wrapping;
@@ -92,40 +90,38 @@ pub fn decode_integer<'a, 'b, I: Iterator<Item=&'b u8>>(bts: &'a mut I, prefix_s
     Err("hpack integer: not enough octets")
 }
 
-// encode n into dest and return number of bytes consumed
-pub fn encode_integer(n: u32, prefix: u8, dest: &mut [u8]) -> u8 {
+// encode n into bst
+pub fn encode_integer<'a, 'b, I: Iterator<Item=&'b mut u8>>(n: u32, bts: &'a mut I, prefix_size: u8) {
     let mut n = n;
-    let check = ( 1 << prefix ) - 1;
+    let check = ( 1 << prefix_size ) - 1;
 
-    dest[0] = 0;
+    let first_byte = bts.next().unwrap();
+
+    *first_byte = 0;
 
     if n < check {
-        dest[0] |= n as u8;
-        return 1;
+        *first_byte |= n as u8;
+        return;
     }
 
-    let mut dest_i = 0;
-    dest[dest_i] |= check as u8;
-
+    *first_byte |= check as u8;
     n -= check;
 
     loop {
-        dest_i += 1;
+        let br = bts.next().unwrap();
 
         if n < 128 {
-            dest[dest_i] = n as u8;
+            *br = n as u8;
             break;
         }
 
-        dest[dest_i] = 0x80 | ( n as u8 & 0x7f );
+        *br = 0x80 | ( n as u8 & 0x7f );
         n >>= 7;
 
         if n == 0 {
             break;
         }
     }
-
-    dest_i as u8 + 1
 }
 
 #[cfg(test)]
@@ -150,48 +146,27 @@ mod tests {
         assert_eq!(num, 1337);
     }
 
+    // this test relise on decodeing to work
     #[test]
     fn encode_test() {
         let mut vec = vec![0; 10];
 
         // simple
         let tst_code = vec![0x4];
-        let size = encode_integer(4, 8, &mut vec);
-        assert_eq!(size, 1);
-        assert_eq!(tst_code, &vec[..size as usize]);
+        encode_integer(4, &mut vec.iter_mut(), 8);
+        let num = decode_integer(&mut vec.iter(), 8).unwrap();
+        assert_eq!(num, 4);
 
         // little less simple
         let tst_code = vec![0x03, 0x01];
-        let size = encode_integer(4, 2, &mut vec);
-        assert_eq!(size, 2);
-        assert_eq!(tst_code, &vec[..size as usize]);
+        encode_integer(4, &mut vec.iter_mut(), 2);
+        let num = decode_integer(&mut vec.iter(), 2).unwrap();
+        assert_eq!(num, 4);
 
         // more complex
         let tst_code = vec![0x1F, 0x9A, 0x0A];
-        let size = encode_integer(1337, 5, &mut vec);
-        assert_eq!(size, 3);
-        assert_eq!(tst_code, &vec[..size as usize]);
+        encode_integer(1337, &mut vec.iter_mut(), 5);
+        let num = decode_integer(&mut vec.iter(), 5).unwrap();
+        assert_eq!(num, 1337);
     }
 }
-
-// encode integer
-// if I < 2^N - 1, encode I on N bits
-// else
-//     encode (2^N - 1) on N bits
-//     I = I - (2^N - 1)
-//     while I >= 128
-//          encode (I % 128 + 128) on 8 bits
-//          I = I / 128
-//     encode I on 8 bits
-
-// decode I from the next N bits
-// if I < 2^N - 1, return I
-// else
-//     M = 0
-//     repeat
-//         B = next octet
-//         I = I + (B & 127) * 2^M
-//         M = M + 7
-//     while B & 128 == 128
-//     return I
-
